@@ -4,43 +4,78 @@
 
 A browser-based implementation of **The Duke** by Catalyst Game Labs. The Duke is a two-player abstract strategy game on a 6×6 grid. Each player has a bag of tiles; on your turn you either pull a new tile from your bag (placing it adjacent to your Duke) or move/strike with an existing tile. Every tile has two sides with different movement patterns, and the tile flips each time it moves. The goal is to capture the opponent's Duke tile.
 
-This project starts with the base game only (no expansions). Initial target is a fully playable local/hotseat version (two players on one screen), with online multiplayer considered for a later phase.
+Base game only (no expansions). Supports:
+- Online multiplayer (two remote players via Firebase)
+- AI opponent (client-side minimax, no server required)
+- Hotseat mode (two local players, no account needed)
 
-## Tech Constraints
+## Tech Stack
 
-- Vanilla HTML, CSS, and JavaScript only — no frameworks, no libraries, no build tools
-- Single `.html` file — do not split into multiple files unless explicitly decided otherwise
-- No npm, no build process, no transpilation
-- Must work when opened directly as a local file (`file://`) with no server required
-- Version number incremented with every change; commit version bumps automatically per global CLAUDE.md rules
+- **Frontend**: Vanilla HTML, CSS, and JavaScript — no frameworks, no build tools, no transpilation
+- **Realtime / state sync**: Firebase Firestore (real-time listeners)
+- **Auth**: Firebase Authentication (Google sign-in or anonymous to start)
+- **Hosting**: Firebase Hosting
+- **AI**: Client-side minimax with alpha-beta pruning — no server component
+- **Firebase SDK**: Loaded via CDN (Firebase JS SDK v9+ modular)
+
+## File Structure
+
+Multi-file project (not single `.html`). Structure TBD, but expected:
+
+```
+/public
+  index.html        # Entry point / lobby
+  game.html         # Game board
+  css/
+  js/
+    game.js         # Core game logic and state
+    tiles.js        # Tile definitions (movement data)
+    ai.js           # Minimax AI
+    firebase.js     # Firebase init and Firestore helpers
+    ui.js           # Rendering and event handling
+firebase.json       # Firebase Hosting config
+.firebaserc         # Firebase project alias
+```
 
 ## Architecture Notes
 
-- All game state lives in a plain JS object (no external state management)
-- Tile movement patterns stored as data (not hardcoded logic) — each tile has a side-A and side-B definition
-- Use a seeded PRNG for any randomness (bag draws) — deterministic replay is desirable
-- No `Math.random()` in game logic — breaking determinism is a critical bug
+- Game state is a plain JS object. For online games, this object is synced to a Firestore document.
+- Only the active player writes their move to Firestore; both clients listen for changes.
+- No server-side move validation in v1 — client is trusted (cheating not a concern for now).
+- Tile movement patterns are stored as data, not hardcoded logic. Each tile has a side-A and side-B definition.
+- Use a seeded PRNG for bag draws — deterministic replay is desirable. No `Math.random()` in game logic.
 
 ## Tile Movement Pattern Format
 
-TBD — to be designed before coding begins. Will represent the movement grid for each tile side (slide, jump, strike, command, etc.).
+TBD — to be designed before coding begins. Must represent: slide, jump, strike, command, and jump-slide movement types across a grid relative to the tile's current position and facing.
+
+## Firebase Project
+
+GCP/Firebase project: TBD — to be linked once Firebase project is initialized.
 
 ## Current State
 
-Project initialized. No code yet. See `_resources/` for reference materials (rulebook, tile diagrams, etc.).
+Architecture decided. No code yet. See `_resources/` for reference materials (rulebook, tile diagrams, etc.).
 
 ## What's Next
 
-1. Define the tile movement data format
-2. Define the full tile roster for the base game (both sides of each tile)
-3. Sketch the UI layout / board rendering approach
-4. Begin coding game state and rendering
+1. Initialize Firebase project and link to this repo (`firebase init`)
+2. Define tile movement data format
+3. Define full base game tile roster (both sides of each tile)
+4. Sketch UI layout and board rendering approach
+5. Begin coding: game state → rendering → Firebase sync → AI
 
 ## Decisions Log
 
-[2026-04-08] Starting with hotseat (local two-player) only — online multiplayer requires a backend and is out of scope for the initial build. Can revisit once the core game is solid.
+[2026-04-08] Moved away from single-file / `file://` constraint — Firebase SDK requires a proper web app context. Multi-file structure adopted.
 
-[2026-04-08] Single `.html` file constraint adopted, consistent with other projects in this repo family. Can revisit if complexity demands splitting.
+[2026-04-08] Firebase (Firestore + Auth + Hosting) chosen for real-time multiplayer state sync. User has an existing GCP account. No custom server needed.
+
+[2026-04-08] AI opponent will run client-side (minimax + alpha-beta pruning). Adequate for The Duke's branching factor; no server compute required.
+
+[2026-04-08] No server-side move validation in v1. Client is trusted. Can add Cloud Functions for validation in a later phase if needed.
+
+[2026-04-08] Starting scope: online multiplayer + AI opponent + hotseat. Online multiplayer is the primary target, not deferred.
 
 ## What Hasn't Worked
 
