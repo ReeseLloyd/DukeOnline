@@ -164,32 +164,37 @@ function _drawIcons(ctx, gx, gy, L, type, side, C) {
   const actions = (typeof TILES !== 'undefined') ? TILES[type]?.sides[side] : null;
   if (!actions) return;
 
+  // Tile's own square within the 5×5 display grid.
+  // Most tiles sit at [2,2] (center); some (e.g. Longbowman) use a different row.
+  const tilePos = (typeof TILES !== 'undefined') ? (TILES[type]?.tileGridPos ?? [2, 2]) : [2, 2];
+  const [tileCol, tileRow] = tilePos;
+
   for (const action of actions) {
     // Derive grid cell from action coordinates.
     // sq/dir is [dc, dr]: dc positive = right, dr positive = forward (up on screen).
-    // Grid 0-indexed: col = 2 + dc, row = 2 - dr.
+    // Grid 0-indexed: col = tileCol + dc, row = tileRow - dr.
     const [dc, dr] = action.sq ?? action.dir;
-    const col = 2 + dc;
-    const row = 2 - dr;
+    const col = tileCol + dc;
+    const row = tileRow - dr;
     if (col < 0 || col > 4 || row < 0 || row > 4) continue;
 
     const cx = gx + col * cellSize + cellSize / 2;
     const cy = gy + row * cellSize + cellSize / 2;
 
     switch (action.type) {
-      case 'move':      _iconMove(ctx, cx, cy, cellSize, C);                  break;
-      case 'jump':      _iconJump(ctx, cx, cy, cellSize, C);                  break;
-      case 'strike':    _iconStrike(ctx, cx, cy, cellSize, C);                break;
-      case 'command':   _iconCommand(ctx, cx, cy, cellSize, action.sq, C);   break;
-      case 'slide':     _iconArrow(ctx, cx, cy, cellSize, action.dir, true,  C); break;
-      case 'jumpSlide': _iconArrow(ctx, cx, cy, cellSize, action.dir, false, C); break;
+      case 'move':      _iconMove(ctx, cx, cy, cellSize, C);                      break;
+      case 'jump':      _iconJump(ctx, cx, cy, cellSize, C);                      break;
+      case 'strike':    _iconStrike(ctx, cx, cy, cellSize, C);                    break;
+      case 'command':   _iconCommand(ctx, cx, cy, cellSize, C);                   break;
+      case 'slide':     _iconArrow(ctx, cx, cy, cellSize, action.dir, true,  C);  break;
+      case 'jumpSlide': _iconArrow(ctx, cx, cy, cellSize, action.dir, false, C);  break;
     }
   }
 
-  // Center pawn — always drawn last so it sits on top
+  // Center pawn — drawn last so it sits on top of any icons in its cell
   _iconPawn(ctx,
-    gx + 2 * cellSize + cellSize / 2,
-    gy + 2 * cellSize + cellSize / 2,
+    gx + tileCol * cellSize + cellSize / 2,
+    gy + tileRow * cellSize + cellSize / 2,
     cellSize, C
   );
 }
@@ -231,29 +236,32 @@ function _iconStrike(ctx, cx, cy, cs, C) {
   ctx.stroke();
 }
 
-// Small filled triangle pointing toward center — Command
-function _iconCommand(ctx, cx, cy, cs, sq, C) {
-  // sq = [dc, dr] — position of this command square relative to tile center.
-  // Screen vector toward grid center: screen-x decreases by dc, screen-y increases by dr
-  // (because dr positive = forward = up = decreasing screen-y, so toward-center y = +dr).
-  const angle = Math.atan2(dr_screen(sq[1]), -sq[0]);
-  const r = cs * 0.24;
+// Two right-angle corner triangles — Command marker.
+// Fills the top-left and bottom-right corners of the cell, pointing away
+// from the cell center. This allows a move or jump icon to occupy the
+// cell center simultaneously without visual overlap.
+function _iconCommand(ctx, cx, cy, cs, C) {
+  const s = cs * 0.34;   // triangle leg length
+  const h = cs * 0.50;   // half cell size — distance from center to cell edge
 
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(angle);
   ctx.fillStyle = C.line;
+
+  // Top-left corner: right-angle at the top-left corner of the cell
   ctx.beginPath();
-  ctx.moveTo(r,  0);
-  ctx.lineTo(-r, -r * 0.62);
-  ctx.lineTo(-r,  r * 0.62);
+  ctx.moveTo(cx - h,     cy - h);      // corner vertex
+  ctx.lineTo(cx - h + s, cy - h);      // along top edge
+  ctx.lineTo(cx - h,     cy - h + s);  // along left edge
   ctx.closePath();
   ctx.fill();
-  ctx.restore();
-}
 
-// Convert tile dr to screen dy (positive dr = up = negative screen dy, so toward-center = +dr)
-function dr_screen(dr) { return dr; }
+  // Bottom-right corner: right-angle at the bottom-right corner of the cell
+  ctx.beginPath();
+  ctx.moveTo(cx + h,     cy + h);      // corner vertex
+  ctx.lineTo(cx + h - s, cy + h);      // along bottom edge
+  ctx.lineTo(cx + h,     cy + h - s);  // along right edge
+  ctx.closePath();
+  ctx.fill();
+}
 
 // Filled arrowhead (slide) or open arrowhead (jumpSlide) pointing in dir
 function _iconArrow(ctx, cx, cy, cs, dir, filled, C) {
