@@ -51,7 +51,7 @@ TBD — to be designed before coding begins. Must represent: slide, jump, strike
 
 ## Firebase Project
 
-GCP/Firebase project: TBD — to be linked once Firebase project is initialized.
+GCP/Firebase project ID: `dukeonline-71c49`
 
 ## Current State
 
@@ -76,6 +76,8 @@ Architecture decided. No code yet. See `_resources/` for reference materials (ru
 [2026-04-08] No server-side move validation in v1. Client is trusted. Can add Cloud Functions for validation in a later phase if needed.
 
 [2026-04-08] Starting scope: online multiplayer + AI opponent + hotseat. Online multiplayer is the primary target, not deferred.
+
+[2026-04-08] Auth: anonymous auth only for now. Players get an anonymous Firebase identity automatically — no sign-in required to play. Can upgrade to Google sign-in later if account persistence / match history becomes a requirement.
 
 ## What Hasn't Worked
 
