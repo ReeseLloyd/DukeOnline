@@ -16,3 +16,9 @@
 # Local env / notes
 *.local
 scratch/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
