@@ -88,7 +88,9 @@ function _layout(size) {
   const borderW = Math.max(1,   size * LP.border);
   const sepW    = Math.max(1.5, size * LP.sep);
   const leftW   = size * LP.leftFrac;
-  const illW    = size - leftW;
+  // Illustration zone starts sepW/2 past the separator centre (illX) and
+  // ends sepW/2 before the tile right edge — symmetric padding on both sides.
+  const illW    = size - leftW - sepW * 0.5;
 
   const pad      = size * LP.gridPad;
   const cellSize = (leftW - 2 * pad) / 5;
@@ -191,11 +193,12 @@ function _drawIcons(ctx, gx, gy, L, type, side, C) {
     }
   }
 
-  // Center pawn — drawn last so it sits on top of any icons in its cell
+  // Center pawn — drawn last so it sits on top of any icons in its cell.
+  // Filled on side 0 (starting side); hollow/stroked on side 1.
   _iconPawn(ctx,
     gx + tileCol * cellSize + cellSize / 2,
     gy + tileRow * cellSize + cellSize / 2,
-    cellSize, C
+    cellSize, side === 0, C
   );
 }
 
@@ -294,35 +297,61 @@ function _iconArrow(ctx, cx, cy, cs, dir, filled, C) {
   ctx.restore();
 }
 
-// Chess pawn silhouette — marks the tile's own square at grid center
-function _iconPawn(ctx, cx, cy, cs, C) {
-  ctx.fillStyle = C.line;
+// Chess pawn silhouette — marks the tile's own square at grid center.
+// filled=true  (side 0): solid dark silhouette.
+// filled=false (side 1): hollow outline only, matching the flip-side convention.
+function _iconPawn(ctx, cx, cy, cs, filled, C) {
   const s = cs * 0.44;
 
-  // Head
-  const headR = s * 0.27;
+  const headR  = s * 0.27;
   const headCY = cy - s * 0.30;
-  ctx.beginPath();
-  ctx.arc(cx, headCY, headR, 0, Math.PI * 2);
-  ctx.fill();
 
-  // Body — trapezoid, narrower at top
   const bodyTopY = headCY + headR * 0.85;
   const bodyBotY = cy + s * 0.40;
   const topHW    = headR * 0.75;
   const botHW    = headR * 1.65;
-  ctx.beginPath();
-  ctx.moveTo(cx - topHW, bodyTopY);
-  ctx.lineTo(cx + topHW, bodyTopY);
-  ctx.lineTo(cx + botHW, bodyBotY);
-  ctx.lineTo(cx - botHW, bodyBotY);
-  ctx.closePath();
-  ctx.fill();
 
-  // Base — wider flat rectangle
   const baseHW = headR * 2.05;
   const baseH  = cs * 0.09;
-  ctx.fillRect(cx - baseHW, bodyBotY, baseHW * 2, baseH);
+
+  if (filled) {
+    ctx.fillStyle = C.line;
+
+    ctx.beginPath();
+    ctx.arc(cx, headCY, headR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(cx - topHW, bodyTopY);
+    ctx.lineTo(cx + topHW, bodyTopY);
+    ctx.lineTo(cx + botHW, bodyBotY);
+    ctx.lineTo(cx - botHW, bodyBotY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillRect(cx - baseHW, bodyBotY, baseHW * 2, baseH);
+  } else {
+    const lw = Math.max(0.8, cs * 0.06);
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth   = lw;
+
+    // Stroke head (inset by lw/2 so the line sits inside the target radius)
+    ctx.beginPath();
+    ctx.arc(cx, headCY, headR - lw / 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Stroke body trapezoid
+    ctx.beginPath();
+    ctx.moveTo(cx - topHW, bodyTopY);
+    ctx.lineTo(cx + topHW, bodyTopY);
+    ctx.lineTo(cx + botHW, bodyBotY);
+    ctx.lineTo(cx - botHW, bodyBotY);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Stroke base rectangle
+    ctx.strokeRect(cx - baseHW, bodyBotY, baseHW * 2, baseH);
+  }
 }
 
 // ─── Tile name ────────────────────────────────────────────────────────────────
@@ -331,85 +360,103 @@ function _drawName(ctx, nx, ny, nw, nh, type, C) {
   const name = TILE_DISPLAY_NAMES[type] ?? type;
   if (!name) return;
 
-  const first = name[0];
-  const rest  = name.slice(1).toUpperCase();
+  // MedievalSharp is Regular weight — bold/italic modifiers have no effect.
+  // Fall back through Georgia for pre-load frames or missing font.
+  const font = "'MedievalSharp', Georgia, 'Times New Roman', serif";
+  const sz   = nh * 0.72;
 
-  const capSz  = nh * 0.75;
-  const restSz = nh * 0.48;
-  const serif  = "Georgia, 'Times New Roman', serif";
+  ctx.fillStyle    = C.line;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign    = 'center';
+  ctx.font         = `${sz}px ${font}`;
 
-  ctx.fillStyle   = C.line;
-  ctx.textBaseline = 'bottom';
-  const baseY = ny + nh;
+  const measured = ctx.measureText(name).width;
+  const cx = nx + nw / 2;
+  const cy = ny + nh / 2;
 
-  // Measure
-  ctx.font = `bold italic ${capSz}px ${serif}`;
-  const capW = ctx.measureText(first).width;
+  if (measured > nw * 0.96) {
+    // Squish horizontally to fit the name zone — preserves vertical scale
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale((nw * 0.96) / measured, 1);
+    ctx.fillText(name, 0, 0);
+    ctx.restore();
+  } else {
+    ctx.fillText(name, cx, cy);
+  }
 
-  ctx.font = `bold ${restSz}px ${serif}`;
-  const restW = ctx.measureText(rest).width;
-
-  // Center within name zone, with a small gap between first letter and rest
-  const gap    = nw * 0.015;
-  const totalW = capW + gap + restW;
-  const startX = nx + Math.max(0, (nw - totalW) / 2);
-
-  // Draw drop-cap first letter
-  ctx.font = `bold italic ${capSz}px ${serif}`;
-  ctx.fillText(first, startX, baseY);
-
-  // Draw remainder — allow squishing if it overflows
-  ctx.font = `bold ${restSz}px ${serif}`;
-  ctx.fillText(rest, startX + capW + gap, baseY, nw - capW - gap);
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'alphabetic';
 }
 
 // ─── Right-zone illustrations ─────────────────────────────────────────────────
 //
-// Each illustration is drawn in a rectangle of width illW × size,
-// with the left edge at x=illX within the tile.
-// All drawing is in the line color on the tile background.
+// Each _ill* function draws in a [0,1]×[0,1] normalized unit square.
+// _drawIllustration applies ctx.scale(iw, ih) so the unit square maps to the
+// exact pixel zone with independent x/y scaling (non-uniform).  This guarantees
+// every illustration fills its zone without overflow, regardless of tile size.
+//
+// Because the illustration zone is portrait (iw ≪ ih), shapes naturally stretch
+// tall — which matches physical tile art.  Strokes look wrong under non-uniform
+// scale, so all illustration drawing uses fills only; the bow is a filled
+// annular arc rather than a stroked arc.
+
+// Shared normalized constants
+const _ILL_MG = 0.055;   // top/bottom margin (fraction of zone height)
+const _ILL_W  = 0.82;    // usable width fraction (small side gutters)
 
 function _drawIllustration(ctx, ix, iy, iw, ih, type, C) {
-  const cx  = ix + iw / 2;
-  const mg  = ih * 0.055;           // top/bottom margin
-  const top = iy + mg;
-  const bot = iy + ih - mg;
-  const w   = iw * 0.78;            // constrained width within zone
+  ctx.save();
+
+  // Clip to illustration zone so any rounding can't bleed into the grid area
+  ctx.beginPath();
+  ctx.rect(ix, iy, iw, ih);
+  ctx.clip();
+
+  // Map normalized [0,1]×[0,1] → pixel zone with independent x/y scaling
+  ctx.translate(ix, iy);
+  ctx.scale(iw, ih);
 
   ctx.fillStyle   = C.line;
   ctx.strokeStyle = C.line;
 
   switch (type) {
-    case 'duke':       _illSword(ctx, cx, top, bot, w, C);       break;
-    case 'footman':    _illShield(ctx, cx, top, bot, w, C);      break;
-    case 'assassin':   _illDagger(ctx, cx, top, bot, w, C);      break;
-    case 'bowman':     _illBow(ctx, cx, top, bot, w, C);         break;
-    case 'champion':   _illHeaterShield(ctx, cx, top, bot, w, C); break;
-    case 'dragoon':    _illLance(ctx, cx, top, bot, w, C);       break;
-    case 'general':    _illFlag(ctx, cx, top, bot, w, C);        break;
-    case 'knight':     _illArrowUp(ctx, cx, top, bot, w, C);     break;
-    case 'longbowman': _illBow(ctx, cx, top, bot, w * 0.85, C);  break;
-    case 'marshall':   _illHammer(ctx, cx, top, bot, w, C);      break;
-    case 'pikeman':    _illPole(ctx, cx, top, bot, w, C);        break;
-    case 'priest':     _illCross(ctx, cx, top, bot, w, C);       break;
-    case 'ranger':     _illArrowUp(ctx, cx, top, bot, w * 0.72, C); break;
-    case 'seer':       _illOrbStaff(ctx, cx, top, bot, w, C);   break;
-    case 'wizard':     _illWand(ctx, cx, top, bot, w, C);        break;
-    case 'duchess':    _illCrown(ctx, cx, top, bot, w, C);       break;
-    case 'oracle':     _illCrescent(ctx, cx, top, bot, w, C);    break;
-    default:           _illPole(ctx, cx, top, bot, w, C);        break;
+    case 'duke':       _illSword(ctx, C);         break;
+    case 'footman':    _illShield(ctx, C);        break;
+    case 'assassin':   _illDagger(ctx, C);        break;
+    case 'bowman':
+    case 'longbowman': _illBow(ctx, C);           break;
+    case 'champion':   _illHeaterShield(ctx, C);  break;
+    case 'dragoon':    _illLance(ctx, C);         break;
+    case 'general':    _illFlag(ctx, C);          break;
+    case 'knight':
+    case 'ranger':     _illArrowUp(ctx, C);       break;
+    case 'marshall':   _illHammer(ctx, C);        break;
+    case 'pikeman':    _illPole(ctx, C);          break;
+    case 'priest':     _illCross(ctx, C);         break;
+    case 'seer':       _illOrbStaff(ctx, C);      break;
+    case 'wizard':     _illWand(ctx, C);          break;
+    case 'duchess':    _illCrown(ctx, C);         break;
+    case 'oracle':     _illCrescent(ctx, C);      break;
+    default:           _illPole(ctx, C);          break;
   }
+
+  ctx.restore();
 }
 
-// Sword with crossguard (Duke)
-function _illSword(ctx, cx, top, bot, w, C) {
-  const h       = bot - top;
-  const bladeW  = w * 0.20;
-  const guardW  = w;
-  const guardH  = h * 0.07;
-  const guardY  = top + h * 0.22;
+// ─── Illustration helpers ─────────────────────────────────────────────────────
 
-  // Blade — tapers to a point at top
+// Sword with crossguard (Duke)
+function _illSword(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  const bladeW = w * 0.20;
+  const guardW = w;
+  const guardH = h * 0.07;
+  const guardY = top + h * 0.22;
+
+  ctx.fillStyle = C.line;
   ctx.beginPath();
   ctx.moveTo(cx,              top);
   ctx.lineTo(cx + bladeW / 2, guardY);
@@ -419,16 +466,18 @@ function _illSword(ctx, cx, top, bot, w, C) {
   ctx.closePath();
   ctx.fill();
 
-  // Crossguard
   ctx.fillRect(cx - guardW / 2, guardY - guardH / 2, guardW, guardH);
 }
 
 // Round shield with central boss (Footman)
-function _illShield(ctx, cx, top, bot, w, C) {
-  const h  = bot - top;
+function _illShield(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const r  = Math.min(w * 0.52, h * 0.40);
   const sy = top + h * 0.42;
 
+  ctx.fillStyle = C.line;
   ctx.beginPath();
   ctx.arc(cx, sy, r, 0, Math.PI * 2);
   ctx.fill();
@@ -442,14 +491,19 @@ function _illShield(ctx, cx, top, bot, w, C) {
 }
 
 // Dagger with pommel (Assassin)
-function _illDagger(ctx, cx, top, bot, w, C) {
-  const h       = bot - top;
+function _illDagger(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const bladeW  = w * 0.19;
   const guardW  = w * 0.84;
   const guardH  = h * 0.055;
   const guardY  = top + h * 0.32;
   const handleW = w * 0.26;
   const handleH = (bot - guardY - guardH) * 0.68;
+  const pomR    = handleW * 0.90;
+
+  ctx.fillStyle = C.line;
 
   // Blade
   ctx.beginPath();
@@ -459,54 +513,56 @@ function _illDagger(ctx, cx, top, bot, w, C) {
   ctx.closePath();
   ctx.fill();
 
-  // Guard
-  ctx.fillRect(cx - guardW / 2, guardY, guardW, guardH);
+  ctx.fillRect(cx - guardW  / 2, guardY,           guardW,  guardH);
+  ctx.fillRect(cx - handleW / 2, guardY + guardH,  handleW, handleH);
 
-  // Handle
-  ctx.fillRect(cx - handleW / 2, guardY + guardH, handleW, handleH);
-
-  // Pommel
-  const pomR = handleW * 0.90;
   ctx.beginPath();
   ctx.arc(cx, guardY + guardH + handleH + pomR * 0.8, pomR, 0, Math.PI * 2);
   ctx.fill();
 }
 
-// Bow — C-curve with string (Bowman / Longbowman)
-function _illBow(ctx, cx, top, bot, w, C) {
-  const h   = bot - top;
-  const lw  = Math.max(2, w * 0.20);
-  const bR  = h * 0.46;  // bow radius
-  const bCX = cx + w * 0.22;  // center of the arc circle
+// Bow — filled annular arc stave + thin filled bowstring (Bowman, Longbowman).
+// Uses filled shapes throughout to avoid stroke-width distortion under the
+// non-uniform ctx.scale transform applied by _drawIllustration.
+function _illBow(ctx, C) {
+  const mg = _ILL_MG;
+  const top = mg, bot = 1 - mg, h = bot - top;
+  const cy = top + h / 2;   // vertical centre of the zone
 
-  ctx.lineWidth = lw;
-  ctx.lineCap   = 'round';
-  ctx.strokeStyle = C.line;
+  // Arc center sits right-of-centre so the opening faces the grid zone.
+  // Radius spans almost the full normalized height; after ctx.scale(iw, ih)
+  // the circle stretches into a tall ellipse — appropriate for a longbow.
+  const arcX  = 0.68;
+  const R     = h * 0.47;    // outer radius (normalized)
+  const thick = R * 0.22;    // stave thickness
+  const r     = R - thick;   // inner radius
 
-  // Bow arc (opening to the right, so arc faces left into the zone)
-  const a1 = Math.PI * 0.55;
-  const a2 = Math.PI * 1.45;
+  // Sweep from ~101° to ~259° (the left semicircle, opening right)
+  const a1 = Math.PI * 0.56;   // bottom tip angle (≈ 100.8°)
+  const a2 = Math.PI * 1.44;   // top    tip angle (≈ 259.2°)
+
+  // Filled bow stave: outer arc forward, inner arc back
+  ctx.fillStyle = C.line;
   ctx.beginPath();
-  ctx.arc(bCX, top + h / 2, bR, a1, a2);
-  ctx.stroke();
+  ctx.arc(arcX, cy, R, a1, a2, false);   // outer arc, clockwise
+  ctx.arc(arcX, cy, r, a2, a1, true);    // inner arc, counter-clockwise
+  ctx.closePath();
+  ctx.fill();
 
-  // Bowstring — connects the two tips
-  const tx1 = bCX + bR * Math.cos(a1);
-  const ty1 = top + h / 2 + bR * Math.sin(a1);
-  const tx2 = bCX + bR * Math.cos(a2);
-  const ty2 = top + h / 2 + bR * Math.sin(a2);
-  ctx.lineWidth = Math.max(1, lw * 0.38);
-  ctx.beginPath();
-  ctx.moveTo(tx1, ty1);
-  ctx.lineTo(tx2, ty2);
-  ctx.stroke();
-
-  ctx.lineCap = 'butt';
+  // Bowstring — both tips share nearly the same x; draw as a thin filled rect
+  const tipX    = arcX + R * Math.cos(a1);
+  const tipTopY = cy   + R * Math.sin(a2);
+  const tipBotY = cy   + R * Math.sin(a1);
+  const strW    = thick * 0.28;
+  ctx.fillRect(tipX - strW / 2, tipTopY, strW, tipBotY - tipTopY);
 }
 
 // Heater shield — flat top, curved to point at bottom (Champion)
-function _illHeaterShield(ctx, cx, top, bot, w, C) {
-  const h = bot - top;
+function _illHeaterShield(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  ctx.fillStyle = C.line;
   ctx.beginPath();
   ctx.moveTo(cx - w / 2, top);
   ctx.lineTo(cx + w / 2, top);
@@ -517,17 +573,18 @@ function _illHeaterShield(ctx, cx, top, bot, w, C) {
   ctx.fill();
 }
 
-// Cavalry lance — vertical with spear tip (Dragoon)
-function _illLance(ctx, cx, top, bot, w, C) {
-  const h      = bot - top;
+// Cavalry lance — vertical with diamond spear tip (Dragoon)
+function _illLance(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const shaftW = w * 0.20;
   const tipH   = h * 0.14;
   const tipW   = w * 0.60;
 
-  // Shaft
+  ctx.fillStyle = C.line;
   ctx.fillRect(cx - shaftW / 2, top + tipH, shaftW, h - tipH);
 
-  // Diamond spear tip
   ctx.beginPath();
   ctx.moveTo(cx,             top);
   ctx.lineTo(cx + tipW / 2,  top + tipH * 0.6);
@@ -538,94 +595,104 @@ function _illLance(ctx, cx, top, bot, w, C) {
 }
 
 // Flag on vertical staff (General)
-function _illFlag(ctx, cx, top, bot, w, C) {
-  const h      = bot - top;
+function _illFlag(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const staffX = cx - w * 0.18;
   const staffW = w * 0.14;
   const flagH  = h * 0.34;
 
-  // Staff
+  ctx.fillStyle = C.line;
   ctx.fillRect(staffX - staffW / 2, top, staffW, h);
 
-  // Pennant triangle
   ctx.beginPath();
-  ctx.moveTo(staffX + staffW / 2, top + h * 0.04);
-  ctx.lineTo(staffX + staffW / 2 + w * 0.72, top + h * 0.04 + flagH * 0.5);
-  ctx.lineTo(staffX + staffW / 2, top + h * 0.04 + flagH);
+  ctx.moveTo(staffX + staffW / 2,            top + h * 0.04);
+  ctx.lineTo(staffX + staffW / 2 + w * 0.66, top + h * 0.04 + flagH * 0.5);
+  ctx.lineTo(staffX + staffW / 2,            top + h * 0.04 + flagH);
   ctx.closePath();
   ctx.fill();
 }
 
-// Large solid upward arrow — all-in-one arrowhead + shaft (Knight / Ranger)
-function _illArrowUp(ctx, cx, top, bot, w, C) {
-  const h      = bot - top;
+// Large solid upward arrow — arrowhead + shaft (Knight, Ranger)
+function _illArrowUp(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const headH  = h * 0.42;
   const shaftW = w * 0.30;
 
+  ctx.fillStyle = C.line;
   ctx.beginPath();
-  ctx.moveTo(cx,           top);             // tip
-  ctx.lineTo(cx + w / 2,   top + headH);    // right wing
-  ctx.lineTo(cx + shaftW / 2, top + headH);
-  ctx.lineTo(cx + shaftW / 2, bot);
-  ctx.lineTo(cx - shaftW / 2, bot);
-  ctx.lineTo(cx - shaftW / 2, top + headH);
-  ctx.lineTo(cx - w / 2,   top + headH);    // left wing
+  ctx.moveTo(cx,               top);
+  ctx.lineTo(cx + w / 2,       top + headH);
+  ctx.lineTo(cx + shaftW / 2,  top + headH);
+  ctx.lineTo(cx + shaftW / 2,  bot);
+  ctx.lineTo(cx - shaftW / 2,  bot);
+  ctx.lineTo(cx - shaftW / 2,  top + headH);
+  ctx.lineTo(cx - w / 2,       top + headH);
   ctx.closePath();
   ctx.fill();
 }
 
 // War hammer — T-shape (Marshall)
-function _illHammer(ctx, cx, top, bot, w, C) {
-  const h       = bot - top;
-  const shaftW  = w * 0.18;
-  const headH   = h * 0.24;
-  const headY   = top + h * 0.18;
+function _illHammer(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
 
-  // Shaft
+  const shaftW = w * 0.18;
+  const headH  = h * 0.24;
+  const headY  = top + h * 0.18;
+
+  ctx.fillStyle = C.line;
   ctx.fillRect(cx - shaftW / 2, headY + headH * 0.5, shaftW, bot - headY - headH * 0.5);
-
-  // Hammer head
-  ctx.fillRect(cx - w / 2, headY, w, headH);
+  ctx.fillRect(cx - w / 2,      headY,                w,      headH);
 }
 
 // Simple pole with spear tip (Pikeman)
-function _illPole(ctx, cx, top, bot, w, C) {
-  const h      = bot - top;
+function _illPole(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const shaftW = w * 0.18;
   const tipH   = h * 0.09;
   const tipW   = w * 0.48;
 
-  // Shaft
+  ctx.fillStyle = C.line;
   ctx.fillRect(cx - shaftW / 2, top + tipH, shaftW, h - tipH);
 
-  // Pointed tip
   ctx.beginPath();
-  ctx.moveTo(cx,            top);
-  ctx.lineTo(cx + tipW / 2, top + tipH);
-  ctx.lineTo(cx - tipW / 2, top + tipH);
+  ctx.moveTo(cx,             top);
+  ctx.lineTo(cx + tipW / 2,  top + tipH);
+  ctx.lineTo(cx - tipW / 2,  top + tipH);
   ctx.closePath();
   ctx.fill();
 }
 
 // Latin cross (Priest)
-function _illCross(ctx, cx, top, bot, w, C) {
-  const h  = bot - top;
-  const vW = w * 0.28;   // vertical bar width
-  const hH = h * 0.20;   // horizontal bar height
-  const hY = top + h * 0.28;  // horizontal bar top
+function _illCross(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
 
-  ctx.fillRect(cx - vW / 2, top, vW, h);          // vertical
-  ctx.fillRect(cx - w / 2,  hY,  w,  hH);         // horizontal
+  const vW = w * 0.28;
+  const hH = h * 0.20;
+  const hY = top + h * 0.28;
+
+  ctx.fillStyle = C.line;
+  ctx.fillRect(cx - vW / 2, top, vW, h);
+  ctx.fillRect(cx - w  / 2, hY,  w,  hH);
 }
 
-// Crystal-ball orb on staff (Seer)
-function _illOrbStaff(ctx, cx, top, bot, w, C) {
-  const h      = bot - top;
+// Crystal-ball orb ring on staff (Seer)
+function _illOrbStaff(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const orbR   = w * 0.47;
   const orbCY  = top + orbR + h * 0.04;
   const shaftW = w * 0.16;
 
-  // Orb ring
+  ctx.fillStyle = C.line;
   ctx.beginPath();
   ctx.arc(cx, orbCY, orbR, 0, Math.PI * 2);
   ctx.fill();
@@ -637,19 +704,20 @@ function _illOrbStaff(ctx, cx, top, bot, w, C) {
   ctx.fill();
   ctx.fillStyle = C.line;
 
-  // Staff below orb
   const staffTop = orbCY + orbR;
   ctx.fillRect(cx - shaftW / 2, staffTop, shaftW, bot - staffTop);
 }
 
 // Wand with 5-pointed star at top (Wizard)
-function _illWand(ctx, cx, top, bot, w, C) {
-  const h       = bot - top;
-  const starR   = w * 0.50;
-  const starCY  = top + starR + h * 0.02;
-  const wandW   = w * 0.16;
+function _illWand(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
 
-  // 5-pointed star
+  const starR  = w * 0.50;
+  const starCY = top + starR + h * 0.02;
+  const wandW  = w * 0.16;
+
+  ctx.fillStyle = C.line;
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
     const a  = (i * Math.PI) / 5 - Math.PI / 2;
@@ -661,44 +729,48 @@ function _illWand(ctx, cx, top, bot, w, C) {
   ctx.closePath();
   ctx.fill();
 
-  // Wand shaft below star
   const wTop = starCY + starR * 0.25;
   ctx.fillRect(cx - wandW / 2, wTop, wandW, bot - wTop);
 }
 
 // Crown with three peaks (Duchess)
-function _illCrown(ctx, cx, top, bot, w, C) {
-  const h       = bot - top;
-  const cBot    = top + h * 0.68;
-  const cTop    = top + h * 0.18;
-  const peakH   = (cBot - cTop) * 0.55;
+function _illCrown(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
 
+  const cBot  = top + h * 0.68;
+  const cTop  = top + h * 0.18;
+  const peakH = (cBot - cTop) * 0.55;
+
+  ctx.fillStyle = C.line;
   ctx.beginPath();
-  ctx.moveTo(cx - w / 2, cBot);
-  ctx.lineTo(cx - w / 2, cTop + peakH);
-  ctx.lineTo(cx - w / 4, cTop);              // left peak
-  ctx.lineTo(cx - w / 10, cTop + peakH * 0.5);
-  ctx.lineTo(cx,           cTop - peakH * 0.12); // center peak (taller)
-  ctx.lineTo(cx + w / 10, cTop + peakH * 0.5);
-  ctx.lineTo(cx + w / 4, cTop);              // right peak
-  ctx.lineTo(cx + w / 2, cTop + peakH);
-  ctx.lineTo(cx + w / 2, cBot);
+  ctx.moveTo(cx - w / 2,   cBot);
+  ctx.lineTo(cx - w / 2,   cTop + peakH);
+  ctx.lineTo(cx - w / 4,   cTop);
+  ctx.lineTo(cx - w / 10,  cTop + peakH * 0.5);
+  ctx.lineTo(cx,            cTop - peakH * 0.12);
+  ctx.lineTo(cx + w / 10,  cTop + peakH * 0.5);
+  ctx.lineTo(cx + w / 4,   cTop);
+  ctx.lineTo(cx + w / 2,   cTop + peakH);
+  ctx.lineTo(cx + w / 2,   cBot);
   ctx.closePath();
   ctx.fill();
 }
 
 // Crescent moon (Oracle)
-function _illCrescent(ctx, cx, top, bot, w, C) {
-  const h  = bot - top;
+function _illCrescent(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
   const r  = Math.min(w * 0.52, h * 0.38);
   const cy = top + h * 0.40;
 
-  // Outer circle
+  ctx.fillStyle = C.line;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Offset inner cutout to create crescent
+  // Offset inner cutout to create crescent shape
   ctx.fillStyle = C.bg;
   ctx.beginPath();
   ctx.arc(cx + r * 0.36, cy - r * 0.10, r * 0.76, 0, Math.PI * 2);

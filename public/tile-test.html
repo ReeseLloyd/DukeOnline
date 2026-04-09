@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Duke — Tile Renderer Test</title>
+  <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -307,7 +308,9 @@ function onSizeChange(v) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-renderAll();
+// Wait for MedievalSharp (and any other web fonts) before first render so the
+// tile name zone uses the correct font metrics from the start.
+document.fonts.ready.then(() => renderAll());
 </script>
 </body>
 </html>

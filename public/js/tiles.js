@@ -402,16 +402,17 @@ const TILES = {
       [
         { type: 'slide', dir: [ 0,  1] }, // slide forward
         { type: 'slide', dir: [ 0, -1] }, // slide backward
-        { type: 'jump',  sq:  [ 1, -1] },
+        { type: 'jump',  sq:  [-2,  1] },
+        { type: 'jump',  sq:  [-1,  2] },
+        { type: 'jump',  sq:  [ 1,  2] },
+        { type: 'jump',  sq:  [ 2,  1] },
       ],
       // Side 1 — command squares forward-diagonal + forward jumps
       [
-        { type: 'command', sq: [-1,  1] },
-        { type: 'command', sq: [ 1,  1] },
-        { type: 'jump',    sq: [-1,  2] },
-        { type: 'jump',    sq: [-2,  1] },
-        { type: 'jump',    sq: [ 1,  2] },
-        { type: 'jump',    sq: [ 2,  1] },
+        { type: 'slide', dir: [-1,  1] }, // slide forward left
+        { type: 'slide', dir: [ 1,  1] }, // slide forward right
+        { type: 'jump',  sq:  [-1, -2] },
+        { type: 'jump',  sq:  [ 1, -2] },
       ],
     ],
   },
@@ -487,21 +488,23 @@ const TILES = {
     sides: [
       // Side 0 — VERIFY
       [
-        { type: 'move',    sq: [ 0,  1] },
+        { type: 'move',    sq: [ 1,  0] },
         { type: 'move',    sq: [-1,  0] },
         { type: 'move',    sq: [ 0, -2] },
-        { type: 'command', sq: [ 0, -2] },
-        { type: 'command', sq: [ 0,  1] },
-        { type: 'command', sq: [ 0,  2] },
+        { type: 'command', sq: [-2,  0] },
+        { type: 'command', sq: [-1,  0] },
+        { type: 'command', sq: [ 1,  0] },
+        { type: 'command', sq: [ 2,  0] },
       ],
       // Side 1 — VERIFY
       [
-        { type: 'move',    sq: [ 0,  1] },
+        { type: 'move',    sq: [ 1,  0] },
         { type: 'move',    sq: [-1,  0] },
         { type: 'move',    sq: [ 0, -2] },
-        { type: 'command', sq: [ 0, -2] },
-        { type: 'command', sq: [ 0,  1] },
-        { type: 'command', sq: [ 0,  2] },
+        { type: 'command', sq: [-2,  0] },
+        { type: 'command', sq: [-1,  0] },
+        { type: 'command', sq: [ 1,  0] },
+        { type: 'command', sq: [ 2,  0] },
       ],
     ],
   },
