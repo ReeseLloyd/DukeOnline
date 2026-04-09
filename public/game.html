@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Duke</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #2a1f0e;
+      color: #e8d9c0;
+      font-family: Georgia, 'Times New Roman', serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100svh;
+      padding: 12px 16px;
+      gap: 8px;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      letter-spacing: 0.06em;
+      color: #d4b483;
+    }
+
+    /* ── Status bar ─────────────────────────────────────────────────────────── */
+
+    #status {
+      text-align: center;
+      min-height: 3em;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3px;
+    }
+
+    #status-player {
+      font-size: 1rem;
+      font-weight: bold;
+    }
+
+    #status-msg {
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+
+    /* ── Board ──────────────────────────────────────────────────────────────── */
+
+    #board-wrap { position: relative; }
+
+    canvas { display: block; }
+
+    /* ── Controls ───────────────────────────────────────────────────────────── */
+
+    #controls {
+      display: flex;
+      gap: 10px;
+      min-height: 38px;
+      align-items: center;
+    }
+
+    button {
+      background: #5c3d1a;
+      color: #e8d9c0;
+      border: 1px solid #8a6030;
+      border-radius: 4px;
+      padding: 7px 16px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) { background: #7a5225; }
+    button:disabled { opacity: 0.38; cursor: default; }
+
+    /* ── Game-over overlay ──────────────────────────────────────────────────── */
+
+    #gameover-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 9, 2, 0.82);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+    }
+
+    #gameover-overlay[hidden] { display: none; }
+
+    .panel {
+      background: #3a2a10;
+      border: 2px solid #8a6030;
+      border-radius: 8px;
+      padding: 28px 32px;
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel h2 { color: #d4b483; font-size: 1.3rem; }
+    .panel p  { opacity: 0.8; line-height: 1.5; }
+
+    .panel button { align-self: center; padding: 9px 24px; font-size: 0.95rem; }
+
+    /* ── Thinking indicator ─────────────────────────────────────────────────── */
+
+    #thinking {
+      font-size: 0.85rem;
+      opacity: 0.65;
+      font-style: italic;
+      min-height: 1.2em;
+    }
+
+    /* ── Draw preview ───────────────────────────────────────────────────────── */
+
+    #draw-preview {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #8a6030;
+      border-radius: 6px;
+      padding: 10px 16px;
+    }
+
+    #draw-preview[hidden] { display: none; }
+
+    #draw-tile-name {
+      font-size: 1rem;
+      font-weight: bold;
+      color: #d4b483;
+      margin-bottom: 4px;
+    }
+
+    #draw-tile-hint {
+      font-size: 0.82rem;
+      opacity: 0.70;
+    }
+
+    /* ── Flip-side preview ──────────────────────────────────────────────────── */
+
+    #flip-preview {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #6a5030;
+      border-radius: 6px;
+      padding: 10px 16px;
+    }
+
+    #flip-preview[hidden] { display: none; }
+
+    #flip-tile-name {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #c8b483;
+      margin-bottom: 4px;
+    }
+
+    #flip-tile-hint {
+      font-size: 0.78rem;
+      opacity: 0.60;
+    }
+  </style>
+</head>
+<body>
+
+<h1>The Duke</h1>
+
+<div id="status">
+  <div id="status-player"></div>
+  <div id="status-msg"></div>
+</div>
+
+<div id="board-wrap">
+  <canvas id="board"></canvas>
+</div>
+
+<div id="controls">
+  <button id="draw-btn" disabled>Draw from Bag</button>
+  <button id="cancel-btn" hidden>Cancel</button>
+</div>
+
+<div id="thinking"></div>
+
+<div id="flip-preview" hidden>
+  <canvas id="flip-tile-canvas" width="90" height="90"></canvas>
+  <div>
+    <div id="flip-tile-name"></div>
+    <div id="flip-tile-hint">Flip side (after moving)</div>
+  </div>
+</div>
+
+<div id="draw-preview" hidden>
+  <canvas id="draw-tile-canvas" width="90" height="90"></canvas>
+  <div>
+    <div id="draw-tile-name"></div>
+    <div id="draw-tile-hint">Click a highlighted square to place it.</div>
+  </div>
+</div>
+
+<!-- Mode selection overlay -->
+<div id="mode-overlay" class="overlay">
+  <div class="panel">
+    <h2>The Duke</h2>
+    <p>Choose how to play:</p>
+    <div class="btn-row">
+      <button id="mode-hotseat">1v1</button>
+      <button id="mode-ai">vs. AI</button>
+    </div>
+  </div>
+</div>
+
+<div id="gameover-overlay" hidden>
+  <div class="panel">
+    <h2 id="gameover-title"></h2>
+    <p id="gameover-msg"></p>
+    <button id="new-game-btn">New Game</button>
+  </div>
+</div>
+
+<script src="js/tiles.js"></script>
+<script src="js/tileRenderer.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ai.js"></script>
+<script>
+'use strict';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PLAYER_NAMES = ['White', 'Brown'];
+
+// Board cell background (checkerboard)
+const CELL_LIGHT = '#efe0c9';
+const CELL_DARK  = '#c9a87c';
+
+// Highlight fill/stroke per action type
+const HIGHLIGHTS = {
+  setup:      { fill: 'rgba(255,210,40,0.42)' },
+  selected:   { fill: 'rgba(255,200,0,0.20)', stroke: 'rgba(255,190,0,0.90)', lw: 3 },
+  move:       { fill: 'rgba(0,175,75,0.38)' },
+  strike:     { fill: 'rgba(210,30,30,0.44)' },
+  draw:       { fill: 'rgba(20,130,220,0.40)' },
+  'cmd-from': { fill: 'rgba(155,0,210,0.40)' },
+  'cmd-to':   { fill: 'rgba(220,115,0,0.44)' },
+};
+
+// ─── Canvas ───────────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById('board');
+const ctx    = canvas.getContext('2d');
+let   cellSz = 100;
+
+function resizeCanvas() {
+  const avail = Math.min(
+    window.innerWidth  - 32,
+    window.innerHeight - 185,   // room for title + status + controls
+    560
+  );
+  const sz  = Math.max(240, Math.floor(avail / 6) * 6);
+  canvas.width  = sz;
+  canvas.height = sz;
+  cellSz = sz / 6;
+  render();
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// ─── Game state ───────────────────────────────────────────────────────────────
+
+let state      = createGame();
+let legalMoves = [];   // valid for state.currentPlayer when phase === 'active'
+
+// ─── AI / game mode ───────────────────────────────────────────────────────────
+
+let gameMode   = 'hotseat';   // 'hotseat' | 'ai'
+let aiWorker   = null;
+let aiThinking = false;
+
+function _applyAIMove(move) {
+  aiThinking = false;
+  document.getElementById('thinking').textContent = '';
+  if (state.phase !== 'active') { render(); updateUI(); return; }
+  if (move) {
+    state      = applyMove(state, move);
+    legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+  }
+  render(); updateUI();
+}
+
+function _runAIOnMainThread() {
+  // Fallback when Web Workers are unavailable. Uses setTimeout so the browser
+  // can paint the "AI is thinking…" message before the blocking computation.
+  setTimeout(function () {
+    const move = getBestMove(state, 4);
+    _applyAIMove(move);
+  }, 30);
+}
+
+function initWorker() {
+  if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+  try {
+    aiWorker = new Worker('js/ai-worker.js');
+    aiWorker.onmessage = function (evt) { _applyAIMove(evt.data.move); };
+    aiWorker.onerror   = function (err) {
+      console.warn('AI worker error, falling back to main thread:', err);
+      aiWorker = null;
+      _runAIOnMainThread();
+    };
+  } catch (e) {
+    console.warn('Workers unavailable, running AI on main thread:', e);
+    aiWorker = null;
+  }
+}
+
+function triggerAISetup() {
+  if (gameMode !== 'ai' || state.phase !== 'setup') return;
+  const info = getSetupInfo(state);
+  if (!info || info.player !== 1) return;
+
+  // Pick a random valid placement target
+  const targets = info.targets;
+  if (targets.length === 0) return;
+
+  setTimeout(function () {
+    // Re-check in case something changed while waiting
+    if (state.phase !== 'setup') return;
+    const info2 = getSetupInfo(state);
+    if (!info2 || info2.player !== 1) return;
+
+    const t   = info2.targets;
+    const pos = t[Math.floor(Math.random() * t.length)];
+    state = applySetupPlacement(state, pos[0], pos[1]);
+
+    if (state.phase === 'active') {
+      legalMoves = getLegalMoves(state);
+      triggerAI();
+    } else {
+      triggerAISetup();   // more AI placements remain
+    }
+    render(); updateUI();
+  }, 500);
+}
+
+function triggerAI() {
+  if (gameMode !== 'ai' || state.phase !== 'active' || state.currentPlayer !== 1) return;
+  aiThinking = true;
+  document.getElementById('thinking').textContent = 'AI is thinking\u2026';
+  if (aiWorker) {
+    aiWorker.postMessage({ state, depth: 4 });
+  } else {
+    _runAIOnMainThread();
+  }
+}
+
+// ─── UI state ─────────────────────────────────────────────────────────────────
+//   mode:       'idle' | 'selected' | 'cmd-to' | 'draw'
+//   uiSelected: [c, r]  — selected tile (move / strike / command origin)
+//   uiCmdrPos:  [c, r]  — commander tile (while choosing commanded tile destination)
+//   uiCmdFrom:  [c, r]  — commanded tile's current square (while choosing destination)
+
+let uiMode     = 'idle';
+let uiSelected = null;
+let uiCmdrPos  = null;
+let uiCmdFrom  = null;
+
+function resetUI() {
+  uiMode = 'idle'; uiSelected = null; uiCmdrPos = null; uiCmdFrom = null;
+  document.getElementById('cancel-btn').hidden = true;
+  document.getElementById('draw-preview').hidden = true;
+  document.getElementById('flip-preview').hidden = true;
+}
+
+function _showFlipPreview(col, row) {
+  const cell = state.board[row]?.[col];
+  if (!cell) { document.getElementById('flip-preview').hidden = true; return; }
+
+  const flipSide = 1 - cell.side;
+  const pc  = document.getElementById('flip-tile-canvas');
+  const sz  = 90;
+  pc.width  = sz;
+  pc.height = sz;
+  const pCtx = pc.getContext('2d');
+
+  if (cell.player === 1) {
+    pCtx.save();
+    pCtx.translate(sz / 2, sz / 2);
+    pCtx.rotate(Math.PI);
+    drawTile(pCtx, -sz / 2, -sz / 2, sz, cell.type, flipSide, cell.player);
+    pCtx.restore();
+  } else {
+    drawTile(pCtx, 0, 0, sz, cell.type, flipSide, cell.player);
+  }
+
+  document.getElementById('flip-tile-name').textContent =
+    TILE_DISPLAY_NAMES[cell.type] ?? cell.type;
+  document.getElementById('flip-preview').hidden = false;
+}
+
+function enterMode(mode) {
+  uiMode = mode;
+  document.getElementById('cancel-btn').hidden = (mode === 'idle');
+}
+
+// ─── Highlight computation ────────────────────────────────────────────────────
+
+function cellKey(c, r) { return `${c},${r}`; }
+
+function computeHighlights() {
+  const h = new Map();
+
+  // Setup phase: highlight valid placement squares for the current step
+  if (state.phase === 'setup') {
+    const info = getSetupInfo(state);
+    if (info) for (const [c, r] of info.targets) h.set(cellKey(c, r), 'setup');
+    return h;
+  }
+
+  if (state.phase !== 'active') return h;
+
+  if (uiMode === 'draw') {
+    for (const m of legalMoves)
+      if (m.action === 'draw') h.set(cellKey(...m.pos), 'draw');
+    return h;
+  }
+
+  if (uiMode === 'selected' && uiSelected) {
+    const [sc, sr] = uiSelected;
+    h.set(cellKey(sc, sr), 'selected');
+    for (const m of legalMoves) {
+      if (m.action === 'move'    && m.from[0] === sc && m.from[1] === sr)
+        h.set(cellKey(...m.to),     'move');
+      if (m.action === 'strike'  && m.from[0] === sc && m.from[1] === sr)
+        h.set(cellKey(...m.target), 'strike');
+      if (m.action === 'command' && m.commander[0] === sc && m.commander[1] === sr)
+        if (!h.has(cellKey(...m.from))) h.set(cellKey(...m.from), 'cmd-from');
+    }
+    return h;
+  }
+
+  if (uiMode === 'cmd-to' && uiCmdrPos && uiCmdFrom) {
+    const [cc, cr] = uiCmdrPos;
+    const [fc, fr] = uiCmdFrom;
+    h.set(cellKey(cc, cr), 'selected');
+    h.set(cellKey(fc, fr), 'cmd-from');
+    for (const m of legalMoves)
+      if (m.action === 'command' &&
+          m.commander[0] === cc && m.commander[1] === cr &&
+          m.from[0] === fc && m.from[1] === fr)
+        h.set(cellKey(...m.to), 'cmd-to');
+    return h;
+  }
+
+  return h;
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const hi = computeHighlights();
+
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      const x  = c * cellSz;
+      const sy = (5 - r) * cellSz;   // row 0 → bottom of canvas
+
+      // Checkerboard cell
+      ctx.fillStyle = (c + r) % 2 === 0 ? CELL_LIGHT : CELL_DARK;
+      ctx.fillRect(x, sy, cellSz, cellSz);
+
+      // Tile (if present); player 1's tiles are rotated 180° to face the white player
+      const cell = state.board[r][c];
+      if (cell) {
+        if (cell.player === 1) {
+          ctx.save();
+          ctx.translate(x + cellSz / 2, sy + cellSz / 2);
+          ctx.rotate(Math.PI);
+          drawTile(ctx, -cellSz / 2, -cellSz / 2, cellSz, cell.type, cell.side, cell.player);
+          ctx.restore();
+        } else {
+          drawTile(ctx, x, sy, cellSz, cell.type, cell.side, cell.player);
+        }
+      }
+
+      // Highlight overlay (drawn on top of tile so it's always visible)
+      const hType = hi.get(cellKey(c, r));
+      if (hType) {
+        const s = HIGHLIGHTS[hType];
+        ctx.fillStyle = s.fill;
+        ctx.fillRect(x, sy, cellSz, cellSz);
+        if (s.stroke) {
+          ctx.strokeStyle = s.stroke;
+          ctx.lineWidth   = s.lw;
+          const inset = s.lw / 2;
+          ctx.strokeRect(x + inset, sy + inset, cellSz - s.lw, cellSz - s.lw);
+        }
+      }
+    }
+  }
+
+  // Board border
+  ctx.strokeStyle = '#5c3d1a';
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+}
+
+// ─── Status / UI text ─────────────────────────────────────────────────────────
+
+function updateUI() {
+  const playerEl = document.getElementById('status-player');
+  const msgEl    = document.getElementById('status-msg');
+  const drawBtn  = document.getElementById('draw-btn');
+
+  if (state.phase === 'gameover') {
+    playerEl.textContent = '';
+    msgEl.textContent    = '';
+    drawBtn.disabled     = true;
+    showGameOver();
+    return;
+  }
+
+  document.getElementById('gameover-overlay').hidden = true;
+
+  const p = state.currentPlayer;
+
+  if (state.phase === 'setup') {
+    const info = getSetupInfo(state);
+    const p    = info.player;
+    playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]}) — Setup`;
+    playerEl.style.color = p === 0 ? '#e8d9c0' : '#c8a477';
+    const firstLabel = `Player ${state.firstPlayer + 1} (${PLAYER_NAMES[state.firstPlayer]}) moves first.`;
+    if (gameMode === 'ai' && p === 1) {
+      msgEl.textContent = 'AI is placing its pieces\u2026';
+    } else {
+      msgEl.textContent = info.subStep === 0
+        ? `Click a highlighted column to place your Duke. ${firstLabel}`
+        : `Click a highlighted square to place Footman ${info.subStep} of 2.`;
+    }
+    drawBtn.disabled = true;
+    return;
+  }
+
+  // Active phase
+  const isAiTurn = gameMode === 'ai' && p === 1;
+  playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]})${isAiTurn ? ' — AI' : ''}`;
+  playerEl.style.color = p === 0 ? '#e8d9c0' : '#c8a477';
+
+  if (aiThinking) {
+    msgEl.textContent    = '';
+    drawBtn.disabled     = true;
+    return;
+  }
+
+  if (uiMode === 'draw')
+    msgEl.textContent = 'Choose a square adjacent to your Duke.';
+  else if (uiMode === 'selected')
+    msgEl.textContent = 'Choose a destination, or click elsewhere to cancel.';
+  else if (uiMode === 'cmd-to')
+    msgEl.textContent = 'Choose a destination for the commanded tile.';
+  else
+    msgEl.textContent = 'Select a tile to move, or draw from the bag.';
+
+  // Draw button
+  const bagSize = state.bags[p].length;
+  const canDraw = bagSize > 0 && legalMoves.some(m => m.action === 'draw');
+
+  if (bagSize === 0)
+    drawBtn.textContent = 'Bag empty';
+  else if (!canDraw)
+    drawBtn.textContent = 'No room to draw';
+  else
+    drawBtn.textContent = `Draw from Bag (${bagSize} left)`;
+
+  drawBtn.disabled = !canDraw || uiMode !== 'idle' || isAiTurn;
+}
+
+function showGameOver() {
+  const w = state.winner;
+  document.getElementById('gameover-title').textContent =
+    `Player ${w + 1} (${PLAYER_NAMES[w]}) wins!`;
+  document.getElementById('gameover-msg').textContent = 'The Duke has been captured.';
+  document.getElementById('gameover-overlay').hidden = false;
+}
+
+// ─── Board click handling ─────────────────────────────────────────────────────
+
+canvas.addEventListener('click', function (evt) {
+  if (aiThinking) return;
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x      = (evt.clientX - rect.left) * scaleX;
+  const y      = (evt.clientY - rect.top)  * scaleY;
+  const col    = Math.floor(x / cellSz);
+  const row    = 5 - Math.floor(y / cellSz);
+  if (col < 0 || col > 5 || row < 0 || row > 5) return;
+  handleClick(col, row);
+});
+
+canvas.addEventListener('mousemove', function (evt) {
+  if (state.phase === 'gameover') { canvas.style.cursor = 'default'; return; }
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x      = (evt.clientX - rect.left) * scaleX;
+  const y      = (evt.clientY - rect.top)  * scaleY;
+  const col    = Math.floor(x / cellSz);
+  const row    = 5 - Math.floor(y / cellSz);
+  if (col < 0 || col > 5 || row < 0 || row > 5) { canvas.style.cursor = 'default'; return; }
+
+  const hi   = computeHighlights();
+  const cell = state.board[row]?.[col];
+  const p    = state.currentPlayer;
+  const isInteractive =
+    hi.has(cellKey(col, row)) ||
+    (state.phase === 'active' && uiMode === 'idle' && cell?.player === p);
+  canvas.style.cursor = isInteractive ? 'pointer' : 'default';
+});
+
+function handleClick(col, row) {
+  // ── Setup phase ─────────────────────────────────────────────────────────────
+  if (state.phase === 'setup') {
+    const info = getSetupInfo(state);
+    if (!info || (gameMode === 'ai' && info.player === 1)) return;  // AI handles its own setup
+    const isValid = info.targets.some(([tc, tr]) => tc === col && tr === row);
+    if (isValid) {
+      state = applySetupPlacement(state, col, row);
+      if (state.phase === 'active') {
+        legalMoves = getLegalMoves(state);
+        triggerAI();
+      } else {
+        triggerAISetup();   // fires if it's now the AI's turn to place
+      }
+      render(); updateUI();
+    }
+    return;
+  }
+
+  if (state.phase !== 'active') return;
+
+  // ── Draw placement mode ─────────────────────────────────────────────────────
+  if (uiMode === 'draw') {
+    const m = legalMoves.find(m => m.action === 'draw' && m.pos[0] === col && m.pos[1] === row);
+    if (m) commitMove(m); else resetUI();
+    render(); updateUI();
+    return;
+  }
+
+  // ── Command destination mode ─────────────────────────────────────────────────
+  if (uiMode === 'cmd-to') {
+    const [cc, cr] = uiCmdrPos;
+    const [fc, fr] = uiCmdFrom;
+    const m = legalMoves.find(m =>
+      m.action === 'command' &&
+      m.commander[0] === cc && m.commander[1] === cr &&
+      m.from[0] === fc && m.from[1] === fr &&
+      m.to[0] === col && m.to[1] === row
+    );
+    if (m) commitMove(m); else resetUI();
+    render(); updateUI();
+    return;
+  }
+
+  // ── Tile selected mode ───────────────────────────────────────────────────────
+  if (uiMode === 'selected' && uiSelected) {
+    const [sc, sr] = uiSelected;
+
+    // Clicking the selected tile again deselects it
+    if (col === sc && row === sr) {
+      resetUI();
+      render(); updateUI();
+      return;
+    }
+
+    const moveM = legalMoves.find(m =>
+      m.action === 'move' && m.from[0] === sc && m.from[1] === sr &&
+      m.to[0] === col && m.to[1] === row
+    );
+    const strikeM = legalMoves.find(m =>
+      m.action === 'strike' && m.from[0] === sc && m.from[1] === sr &&
+      m.target[0] === col && m.target[1] === row
+    );
+    const cmdFromM = legalMoves.find(m =>
+      m.action === 'command' && m.commander[0] === sc && m.commander[1] === sr &&
+      m.from[0] === col && m.from[1] === row
+    );
+
+    if (moveM)   { commitMove(moveM);   render(); updateUI(); return; }
+    if (strikeM) { commitMove(strikeM); render(); updateUI(); return; }
+
+    if (cmdFromM) {
+      // Transition to command-destination selection
+      uiCmdrPos  = [sc, sr];
+      uiCmdFrom  = [col, row];
+      uiSelected = null;
+      enterMode('cmd-to');
+      render(); updateUI();
+      return;
+    }
+
+    // Click didn't match any valid target — deselect, then try re-selecting
+    resetUI();
+    trySelect(col, row);
+    _showFlipPreview(col, row);
+    render(); updateUI();
+    return;
+  }
+
+  // ── Idle — try to select a tile ─────────────────────────────────────────────
+  trySelect(col, row);
+  _showFlipPreview(col, row);
+  render(); updateUI();
+}
+
+function trySelect(col, row) {
+  const p    = state.currentPlayer;
+  const cell = state.board[row][col];
+  if (!cell || cell.player !== p) return;
+
+  const hasMoves = legalMoves.some(m =>
+    (m.action === 'move'   || m.action === 'strike') && m.from[0] === col && m.from[1] === row ||
+    m.action === 'command' && m.commander[0] === col && m.commander[1] === row
+  );
+  if (!hasMoves) return;
+
+  uiSelected = [col, row];
+  enterMode('selected');
+}
+
+function commitMove(move) {
+  state      = applyMove(state, move);
+  legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+  resetUI();
+  triggerAI();
+}
+
+// ─── Button handlers ──────────────────────────────────────────────────────────
+
+document.getElementById('draw-btn').addEventListener('click', function () {
+  enterMode('draw');
+  document.getElementById('flip-preview').hidden = true;
+
+  // Reveal the tile that will be drawn so the player can plan placement
+  const p    = state.currentPlayer;
+  const next = peekBag(state, p);
+  if (next) {
+    const pc  = document.getElementById('draw-tile-canvas');
+    const sz  = 90;
+    pc.width  = sz;
+    pc.height = sz;
+    drawTile(pc.getContext('2d'), 0, 0, sz, next, 0, p);
+    document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[next] ?? next;
+    document.getElementById('draw-preview').hidden = false;
+  }
+
+  render(); updateUI();
+});
+
+document.getElementById('cancel-btn').addEventListener('click', function () {
+  resetUI();
+  render(); updateUI();
+});
+
+document.getElementById('new-game-btn').addEventListener('click', function () {
+  document.getElementById('gameover-overlay').hidden = true;
+  if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
+  aiThinking = false;
+  document.getElementById('thinking').textContent = '';
+  state = createGame();
+  legalMoves = [];
+  resetUI();
+  render();
+  document.getElementById('mode-overlay').hidden = false;
+});
+
+document.getElementById('mode-hotseat').addEventListener('click', () => startNewGame('hotseat'));
+document.getElementById('mode-ai').addEventListener('click',      () => startNewGame('ai'));
+
+function startNewGame(mode) {
+  gameMode   = mode;
+  aiThinking = false;
+  document.getElementById('thinking').textContent = '';
+  state      = createGame();
+  legalMoves = [];
+  resetUI();
+  if (mode === 'ai') {
+    initWorker();
+    triggerAISetup();   // fires immediately if AI (player 1) sets up first
+  }
+  document.getElementById('mode-overlay').hidden = true;
+  render(); updateUI();
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+
+resizeCanvas();   // sizes canvas and calls render()
+// Mode overlay is visible by default (no hidden attr) — wait for player to choose
+</script>
+</body>
+</html>
