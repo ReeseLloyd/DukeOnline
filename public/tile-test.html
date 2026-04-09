@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duke — Tile Renderer Test</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #2a2520;
+      color: #d4cdc4;
+      font-family: Georgia, 'Times New Roman', serif;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: normal;
+      letter-spacing: 0.06em;
+      margin-bottom: 20px;
+      color: #e8e0d4;
+    }
+
+    /* ── Controls ─────────────────────────────────────────────────── */
+
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 28px;
+      padding: 14px 18px;
+      background: #1e1a16;
+      border: 1px solid #4a4038;
+      border-radius: 4px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #a09080;
+    }
+
+    .control-group label { white-space: nowrap; }
+
+    select, input[type="range"] {
+      background: #2a2520;
+      border: 1px solid #5a5048;
+      color: #d4cdc4;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    input[type="range"] { padding: 0; width: 120px; cursor: pointer; }
+
+    #sizeValue {
+      min-width: 36px;
+      font-size: 0.82rem;
+      color: #8a8070;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    button {
+      background: #3a3028;
+      border: 1px solid #5a5048;
+      color: #c0b8a8;
+      padding: 5px 14px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 0.83rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover  { background: #4a4038; }
+    button.active { background: #5a5048; color: #e8e0d4; }
+
+    /* ── Section headers ──────────────────────────────────────────── */
+
+    .section-header {
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #6a6058;
+      margin: 28px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #3a3028;
+    }
+
+    /* ── Tile grid ────────────────────────────────────────────────── */
+
+    .tile-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .tile-entry {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tile-sides {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .tile-side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    canvas {
+      display: block;
+      /* slight drop shadow so tiles read against the dark background */
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+      cursor: default;
+    }
+
+    .side-label {
+      font-size: 0.72rem;
+      color: #6a6058;
+      letter-spacing: 0.04em;
+    }
+
+    .tile-name {
+      font-size: 0.82rem;
+      color: #a09880;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+
+    .tile-meta {
+      font-size: 0.70rem;
+      color: #5a5848;
+      text-align: center;
+    }
+
+    .enhanced-badge {
+      font-size: 0.68rem;
+      color: #8a7848;
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
+<body>
+
+<h1>The Duke — Tile Renderer Test</h1>
+
+<div id="controls">
+  <div class="control-group">
+    <label>Player color:</label>
+    <div class="btn-group">
+      <button id="btnWhite" class="active" onclick="setPlayer(0)">White (P1)</button>
+      <button id="btnBrown"               onclick="setPlayer(1)">Brown (P2)</button>
+      <button id="btnBoth"                onclick="setPlayer(2)">Both</button>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <label>Tile size:</label>
+    <input type="range" id="sizeRange" min="80" max="280" value="150"
+           oninput="onSizeChange(this.value)">
+    <span id="sizeValue">150px</span>
+  </div>
+</div>
+
+<div id="output"></div>
+
+<script src="js/tiles.js"></script>
+<script src="js/tileRenderer.js"></script>
+<script>
+'use strict';
+
+let currentPlayer = 0;   // 0 = white, 1 = brown, 2 = both
+let currentSize   = 150;
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+
+function makeCanvas(size, type, side, player) {
+  const canvas = document.createElement('canvas');
+  canvas.width  = size;
+  canvas.height = size;
+  drawTile(canvas.getContext('2d'), 0, 0, size, type, side, player);
+  return canvas;
+}
+
+function renderAll() {
+  const out  = document.getElementById('output');
+  out.innerHTML = '';
+
+  const base     = Object.entries(TILES).filter(([, t]) => !t.enhanced);
+  const enhanced = Object.entries(TILES).filter(([, t]) =>  t.enhanced);
+
+  renderSection(out, 'Base game tiles', base);
+
+  if (enhanced.length) {
+    renderSection(out, 'Enhanced tiles (optional variant)', enhanced);
+  }
+}
+
+function renderSection(container, title, entries) {
+  const header = document.createElement('div');
+  header.className   = 'section-header';
+  header.textContent = title;
+  container.appendChild(header);
+
+  const grid = document.createElement('div');
+  grid.className = 'tile-grid';
+
+  for (const [type, tile] of entries) {
+    grid.appendChild(makeTileEntry(type, tile));
+  }
+
+  container.appendChild(grid);
+}
+
+function makeTileEntry(type, tile) {
+  const entry = document.createElement('div');
+  entry.className = 'tile-entry';
+
+  const sides = document.createElement('div');
+  sides.className = 'tile-sides';
+
+  const players = currentPlayer === 2 ? [0, 1] : [currentPlayer];
+
+  for (const p of players) {
+    for (let s = 0; s < 2; s++) {
+      const sideDiv = document.createElement('div');
+      sideDiv.className = 'tile-side';
+
+      sideDiv.appendChild(makeCanvas(currentSize, type, s, p));
+
+      const lbl = document.createElement('div');
+      lbl.className   = 'side-label';
+      lbl.textContent = (p === 0 ? 'White' : 'Brown') + ' · Side ' + s;
+      sideDiv.appendChild(lbl);
+
+      sides.appendChild(sideDiv);
+    }
+  }
+
+  entry.appendChild(sides);
+
+  const name = document.createElement('div');
+  name.className   = 'tile-name';
+  name.textContent = TILE_DISPLAY_NAMES[type] ?? type;
+  entry.appendChild(name);
+
+  const meta = document.createElement('div');
+  meta.className = 'tile-meta';
+  const onBoard = tile.startOnBoard ?? 0;
+  const inBag   = tile.count - onBoard;
+  const parts   = [];
+  if (onBoard) parts.push(onBoard + ' start on board');
+  if (inBag)   parts.push(inBag + ' in bag');
+  meta.textContent = 'count: ' + tile.count + (parts.length ? '  (' + parts.join(', ') + ')' : '');
+  entry.appendChild(meta);
+
+  if (tile.enhanced) {
+    const badge = document.createElement('div');
+    badge.className   = 'enhanced-badge';
+    badge.textContent = 'enhanced — optional variant';
+    entry.appendChild(badge);
+  }
+
+  if (tile.tileGridPos) {
+    const gp = document.createElement('div');
+    gp.className   = 'tile-meta';
+    gp.textContent = 'tileGridPos: [' + tile.tileGridPos.join(', ') + ']';
+    entry.appendChild(gp);
+  }
+
+  return entry;
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+
+function setPlayer(p) {
+  currentPlayer = p;
+  document.getElementById('btnWhite').classList.toggle('active', p === 0);
+  document.getElementById('btnBrown').classList.toggle('active', p === 1);
+  document.getElementById('btnBoth' ).classList.toggle('active', p === 2);
+  renderAll();
+}
+
+function onSizeChange(v) {
+  currentSize = parseInt(v, 10);
+  document.getElementById('sizeValue').textContent = v + 'px';
+  renderAll();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+renderAll();
+</script>
+</body>
+</html>
