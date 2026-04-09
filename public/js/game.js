@@ -9,10 +9,11 @@
  *   createGame(opts)              → state     Create a fresh game (setup phase).
  *   applySetupPlacement(state,c,r) → state     Setup: place next piece (Duke, then Footmen).
  *   getSetupInfo(state)           → object    Setup phase metadata for the UI.
- *   getLegalMoves(state)          → Move[]    All legal moves for currentPlayer.
+ *   getLegalMoves(state)          → Move[]    All legal moves for currentPlayer (Guard-filtered).
  *   applyMove(state, move)        → state     Execute a move; returns new state object.
  *   peekBag(state, player)        → string|null   Next tile type in player's bag.
  *   getWinner(state)              → 0|1|null  Winner, or null if game is still active.
+ *   isDukeInGuard(state)          → boolean   True if currentPlayer's Duke is threatened.
  *
  * ─── State shape ──────────────────────────────────────────────────────────────
  *
@@ -44,7 +45,7 @@
  *
  * ─── Notes / known deviations ─────────────────────────────────────────────────
  *
- *   v1 omissions: no stalemate detection; no threatened-Duke move filtering.
+ *   Implemented: threatened-Duke move filtering; no-legal-moves loss detection.
  */
 
 'use strict';
@@ -178,12 +179,12 @@ function applySetupPlacement(state, col, row) {
 // ─── Move generation ──────────────────────────────────────────────────────────
 
 /**
- * Return all legal moves for state.currentPlayer.
- * Returns [] if the player has no moves (edge case; game logic leaves this to the UI).
+ * Return all candidate moves for state.currentPlayer without any Guard
+ * filtering.  Used internally by getLegalMoves and _hasAnyLegalMove.
  * @param {object} state
  * @returns {Array}  Array of move objects.
  */
-function getLegalMoves(state) {
+function _getRawLegalMoves(state) {
   if (state.phase !== 'active') return [];
 
   const p     = state.currentPlayer;
@@ -213,16 +214,51 @@ function getLegalMoves(state) {
   return moves;
 }
 
+/**
+ * Return all legal moves for state.currentPlayer, excluding any move that
+ * would leave the current player's Duke exposed to capture ("in Guard").
+ * @param {object} state
+ * @returns {Array}  Array of move objects.
+ */
+function getLegalMoves(state) {
+  if (state.phase !== 'active') return [];
+  const p   = state.currentPlayer;
+  const raw = _getRawLegalMoves(state);
+  return raw.filter(function (move) {
+    const next = _applyMoveCore(state, move);
+    if (next.phase === 'gameover') return true;   // winning move — always legal
+    return !_isDukeThreatenedBy(next.board, p);
+  });
+}
+
+/**
+ * Return true as soon as one legal (Guard-safe) move exists for
+ * state.currentPlayer.  Short-circuits on the first safe move found.
+ * Used inside applyMove to detect positions where the opponent has no reply.
+ */
+function _hasAnyLegalMove(state) {
+  if (state.phase !== 'active') return false;
+  const p   = state.currentPlayer;
+  const raw = _getRawLegalMoves(state);
+  for (const move of raw) {
+    const next = _applyMoveCore(state, move);
+    if (next.phase === 'gameover') return true;
+    if (!_isDukeThreatenedBy(next.board, p)) return true;
+  }
+  return false;
+}
+
 // ─── Move application ─────────────────────────────────────────────────────────
 
 /**
  * Apply a move to state and return the resulting state.
- * Does not mutate the input state.
+ * Does not mutate the input state.  Does NOT check for no-legal-moves;
+ * that check is done in the public applyMove wrapper below.
  * @param {object} state
  * @param {object} move
  * @returns {object}  New state.
  */
-function applyMove(state, move) {
+function _applyMoveCore(state, move) {
   if (state.phase !== 'active') throw new Error('applyMove called outside active phase');
 
   const next = _copyState(state);
@@ -281,6 +317,27 @@ function applyMove(state, move) {
   return next;
 }
 
+/**
+ * Apply a move to state and return the resulting state.
+ * Does not mutate the input state.
+ *
+ * After the move is applied, checks whether the new current player has any
+ * legal (Guard-safe) reply.  If not, the game ends immediately — the player
+ * who just moved wins.  This is the "checkmate" equivalent in The Duke.
+ *
+ * @param {object} state
+ * @param {object} move
+ * @returns {object}  New state.
+ */
+function applyMove(state, move) {
+  const next = _applyMoveCore(state, move);
+  if (next.phase !== 'gameover' && !_hasAnyLegalMove(next)) {
+    next.phase  = 'gameover';
+    next.winner = state.currentPlayer;   // the player who just moved wins
+  }
+  return next;
+}
+
 // ─── Convenience queries ──────────────────────────────────────────────────────
 
 /** Return the next tile type in player's bag, or null if the bag is empty. */
@@ -291,6 +348,18 @@ function peekBag(state, player) {
 /** Return the winning player (0 or 1), or null if the game is not over. */
 function getWinner(state) {
   return state.winner;
+}
+
+/**
+ * Return true if the current player's Duke is threatened — i.e. the opponent
+ * has at least one move on the current board that would capture it ("Guard").
+ * Use this to trigger the Guard announcement in the UI after each move.
+ * @param {object} state
+ * @returns {boolean}
+ */
+function isDukeInGuard(state) {
+  if (state.phase !== 'active') return false;
+  return _isDukeThreatenedBy(state.board, state.currentPlayer);
 }
 
 // ─── Internal: state copy ─────────────────────────────────────────────────────
@@ -396,6 +465,34 @@ function _adjacentEmpty(board, col, row) {
     if (_inBounds(c, r) && board[r][c] === null) result.push([c, r]);
   }
   return result;
+}
+
+/**
+ * Return true if the opponent has at least one move on the current board
+ * that would capture attackedPlayer's Duke.
+ * Used to filter out moves that leave the Duke exposed ("in check").
+ *
+ * @param {Array}  board
+ * @param {number} attackedPlayer  The player whose Duke we are checking.
+ */
+function _isDukeThreatenedBy(board, attackedPlayer) {
+  const attacker = 1 - attackedPlayer;
+  const dukePos  = _findDuke(board, attackedPlayer);
+  if (!dukePos) return true;   // Duke already gone — treat as threatened
+  const [dc, dr] = dukePos;
+
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      const cell = board[r][c];
+      if (!cell || cell.player !== attacker) continue;
+      for (const m of _movesForTile(board, c, r, cell, attacker)) {
+        if (m.action === 'move'    && m.to[0]     === dc && m.to[1]     === dr) return true;
+        if (m.action === 'strike'  && m.target[0] === dc && m.target[1] === dr) return true;
+        if (m.action === 'command' && m.to[0]     === dc && m.to[1]     === dr) return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ─── Internal: per-tile move generation ──────────────────────────────────────

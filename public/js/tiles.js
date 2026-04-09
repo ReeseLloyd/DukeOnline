@@ -58,10 +58,6 @@
  *
  * Each side is an array of action objects: { type, sq } or { type, dir }
  *
- * VERIFICATION NOTES
- * ------------------
- * Tiles marked // VERIFY have movement patterns that are uncertain.
- * Enhanced tiles (Duchess, Oracle) are unverified placeholders.
  */
 
 const TILES = {
@@ -320,7 +316,7 @@ const TILES = {
         { type: 'jump',  sq:  [-2,  2] }, // jump forward-left
         { type: 'slide', dir: [-1,  0] }, // slide left
         { type: 'slide', dir: [ 1,  0] }, // slide right
-        { type: 'jump',  sq:  [ 0, -2] }, // jump back 2 — VERIFY
+        { type: 'jump',  sq:  [ 0, -2] }, // jump back 2
       ],
       // Side 1 — dense move block with command squares across the forward row.
       // Command overlaps with move on [-1,1], [0,1], [1,1].
@@ -407,7 +403,7 @@ const TILES = {
         { type: 'jump',  sq:  [ 1,  2] },
         { type: 'jump',  sq:  [ 2,  1] },
       ],
-      // Side 1 — command squares forward-diagonal + forward jumps
+      // Side 1 — forward diagonal slides + backward L-jumps
       [
         { type: 'slide', dir: [-1,  1] }, // slide forward left
         { type: 'slide', dir: [ 1,  1] }, // slide forward right
@@ -480,13 +476,13 @@ const TILES = {
   },
 
   // ---------------------------------------------------------------------------
-  // DUCHESS  (enhanced tile — optional variant)  VERIFY: unverified placeholder
+  // DUCHESS  (enhanced tile — optional variant)
   // ---------------------------------------------------------------------------
   duchess: {
     count: 1,
     enhanced: true,
     sides: [
-      // Side 0 — VERIFY
+      // Side 0
       [
         { type: 'move',    sq: [ 1,  0] },
         { type: 'move',    sq: [-1,  0] },
@@ -496,7 +492,7 @@ const TILES = {
         { type: 'command', sq: [ 1,  0] },
         { type: 'command', sq: [ 2,  0] },
       ],
-      // Side 1 — VERIFY
+      // Side 1
       [
         { type: 'move',    sq: [ 1,  0] },
         { type: 'move',    sq: [-1,  0] },
@@ -510,20 +506,20 @@ const TILES = {
   },
 
   // ---------------------------------------------------------------------------
-  // ORACLE  (enhanced tile — optional variant)  VERIFY: unverified placeholder
+  // ORACLE  (enhanced tile — optional variant)
   // ---------------------------------------------------------------------------
   oracle: {
     count: 1,
     enhanced: true,
     sides: [
-      // Side 0 — VERIFY
+      // Side 0
       [
         { type: 'move', sq: [-1,  1] },
         { type: 'move', sq: [-1, -1] },
         { type: 'move', sq: [ 1, -1] },
         { type: 'move', sq: [ 1,  1] },
       ],
-      // Side 1 — VERIFY: unverified
+      // Side 1
       [
       ],
     ],
@@ -552,22 +548,6 @@ function buildBag() {
     }
   }
   return bag;
-}
-
-/**
- * Returns the starting board pieces for one player.
- * Produces one { type, side: 0 } entry per copy that starts on the board.
- */
-function getStartingPieces() {
-  const pieces = [];
-  for (const [key, tile] of Object.entries(TILES)) {
-    if (tile.enhanced) continue;
-    const onBoard = tile.startOnBoard ?? 0;
-    for (let i = 0; i < onBoard; i++) {
-      pieces.push({ type: key, side: 0 });
-    }
-  }
-  return pieces;
 }
 
 /**

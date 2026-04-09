@@ -76,16 +76,18 @@
     button:hover:not(:disabled) { background: #7a5225; }
     button:disabled { opacity: 0.38; cursor: default; }
 
-    /* ── Game-over overlay ──────────────────────────────────────────────────── */
+    /* ── Game-over card ─────────────────────────────────────────────────────── */
 
+    /* Wrapper has no background — board shows through. pointer-events: none so
+       clicks reach the board; the panel re-enables them for its own controls. */
     #gameover-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(15, 9, 2, 0.82);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 20;
+      pointer-events: none;
     }
 
     #gameover-overlay[hidden] { display: none; }
@@ -101,12 +103,39 @@
       display: flex;
       flex-direction: column;
       gap: 14px;
+      position: relative;
+      pointer-events: auto;
     }
 
     .panel h2 { color: #d4b483; font-size: 1.3rem; }
     .panel p  { opacity: 0.8; line-height: 1.5; }
 
     .panel button { align-self: center; padding: 9px 24px; font-size: 0.95rem; }
+
+    #gameover-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #e8d9c0;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 4px 6px;
+      cursor: pointer;
+      opacity: 0.55;
+    }
+    #gameover-close:hover { opacity: 1; background: none; }
+
+    /* ── Post-game controls ─────────────────────────────────────────────────── */
+
+    #postgame-controls {
+      display: flex;
+      gap: 10px;
+      min-height: 38px;
+      align-items: center;
+    }
+    #postgame-controls[hidden] { display: none; }
 
     /* ── Thinking indicator ─────────────────────────────────────────────────── */
 
@@ -168,6 +197,23 @@
       font-size: 0.78rem;
       opacity: 0.60;
     }
+
+    /* ── Mode / difficulty overlay ──────────────────────────────────────────── */
+
+    .overlay { position: fixed; inset: 0; background: rgba(15,9,2,0.82);
+               display: flex; align-items: center; justify-content: center; z-index: 20; }
+    .overlay[hidden] { display: none; }
+
+    .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    #difficulty-section { display: flex; flex-direction: column; gap: 10px; }
+    #difficulty-section[hidden] { display: none; }
+    #difficulty-section p { opacity: 0.75; font-size: 0.9rem; }
+
+    #diff-hard   { background: #6b2020; border-color: #a04040; }
+    #diff-hard:hover:not(:disabled)   { background: #882828; }
+    #diff-expert { background: #4a1010; border-color: #802020; }
+    #diff-expert:hover:not(:disabled) { background: #621818; }
   </style>
 </head>
 <body>
@@ -186,6 +232,10 @@
 <div id="controls">
   <button id="draw-btn" disabled>Draw from Bag</button>
   <button id="cancel-btn" hidden>Cancel</button>
+</div>
+
+<div id="postgame-controls" hidden>
+  <button id="new-game-btn-post">New Game</button>
 </div>
 
 <div id="thinking"></div>
@@ -215,11 +265,21 @@
       <button id="mode-hotseat">1v1</button>
       <button id="mode-ai">vs. AI</button>
     </div>
+    <div id="difficulty-section" hidden>
+      <p>Choose difficulty:</p>
+      <div class="btn-row">
+        <button id="diff-easy">Easy</button>
+        <button id="diff-medium">Medium</button>
+        <button id="diff-hard">Hard</button>
+        <button id="diff-expert">Expert</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <div id="gameover-overlay" hidden>
   <div class="panel">
+    <button id="gameover-close" title="Dismiss">&#x2715;</button>
     <h2 id="gameover-title"></h2>
     <p id="gameover-msg"></p>
     <button id="new-game-btn">New Game</button>
@@ -281,6 +341,7 @@ let legalMoves = [];   // valid for state.currentPlayer when phase === 'active'
 // ─── AI / game mode ───────────────────────────────────────────────────────────
 
 let gameMode   = 'hotseat';   // 'hotseat' | 'ai'
+let aiDepth    = 4;           // search depth — set by difficulty selector
 let aiWorker   = null;
 let aiThinking = false;
 
@@ -299,7 +360,7 @@ function _runAIOnMainThread() {
   // Fallback when Web Workers are unavailable. Uses setTimeout so the browser
   // can paint the "AI is thinking…" message before the blocking computation.
   setTimeout(function () {
-    const move = getBestMove(state, 4);
+    const move = getBestMove(state, aiDepth);
     _applyAIMove(move);
   }, 30);
 }
@@ -354,7 +415,7 @@ function triggerAI() {
   aiThinking = true;
   document.getElementById('thinking').textContent = 'AI is thinking\u2026';
   if (aiWorker) {
-    aiWorker.postMessage({ state, depth: 4 });
+    aiWorker.postMessage({ state, depth: aiDepth });
   } else {
     _runAIOnMainThread();
   }
@@ -406,7 +467,9 @@ function _showFlipPreview(col, row) {
 
 function enterMode(mode) {
   uiMode = mode;
-  document.getElementById('cancel-btn').hidden = (mode === 'idle');
+  // Cancel is suppressed in draw mode: once "Draw from Bag" is clicked the
+  // player has committed to placing the tile (per the rules).
+  document.getElementById('cancel-btn').hidden = (mode === 'idle' || mode === 'draw');
 }
 
 // ─── Highlight computation ────────────────────────────────────────────────────
@@ -520,8 +583,10 @@ function updateUI() {
   const drawBtn  = document.getElementById('draw-btn');
 
   if (state.phase === 'gameover') {
-    playerEl.textContent = '';
-    msgEl.textContent    = '';
+    const w = state.winner;
+    playerEl.textContent = `Player ${w + 1} (${PLAYER_NAMES[w]}) wins!`;
+    playerEl.style.color = w === 0 ? '#e8d9c0' : '#c8a477';
+    msgEl.textContent    = 'View the final board, then start a New Game below.';
     drawBtn.disabled     = true;
     showGameOver();
     return;
@@ -550,7 +615,8 @@ function updateUI() {
 
   // Active phase
   const isAiTurn = gameMode === 'ai' && p === 1;
-  playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]})${isAiTurn ? ' — AI' : ''}`;
+  const inGuard  = isDukeInGuard(state);
+  playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]})${isAiTurn ? ' — AI' : ''}${inGuard ? ' — Guard' : ''}`;
   playerEl.style.color = p === 0 ? '#e8d9c0' : '#c8a477';
 
   if (aiThinking) {
@@ -560,11 +626,13 @@ function updateUI() {
   }
 
   if (uiMode === 'draw')
-    msgEl.textContent = 'Choose a square adjacent to your Duke.';
+    msgEl.textContent = 'Draw committed — click an adjacent square to place it.';
   else if (uiMode === 'selected')
     msgEl.textContent = 'Choose a destination, or click elsewhere to cancel.';
   else if (uiMode === 'cmd-to')
     msgEl.textContent = 'Choose a destination for the commanded tile.';
+  else if (inGuard)
+    msgEl.textContent = 'Your Duke is in Guard — you must resolve the threat.';
   else
     msgEl.textContent = 'Select a tile to move, or draw from the bag.';
 
@@ -587,7 +655,8 @@ function showGameOver() {
   document.getElementById('gameover-title').textContent =
     `Player ${w + 1} (${PLAYER_NAMES[w]}) wins!`;
   document.getElementById('gameover-msg').textContent = 'The Duke has been captured.';
-  document.getElementById('gameover-overlay').hidden = false;
+  document.getElementById('gameover-overlay').hidden  = false;
+  document.getElementById('postgame-controls').hidden = false;
 }
 
 // ─── Board click handling ─────────────────────────────────────────────────────
@@ -649,8 +718,8 @@ function handleClick(col, row) {
   // ── Draw placement mode ─────────────────────────────────────────────────────
   if (uiMode === 'draw') {
     const m = legalMoves.find(m => m.action === 'draw' && m.pos[0] === col && m.pos[1] === row);
-    if (m) commitMove(m); else resetUI();
-    render(); updateUI();
+    if (m) { commitMove(m); render(); updateUI(); }
+    // No cancel: the player has committed to drawing this turn.
     return;
   }
 
@@ -769,8 +838,9 @@ document.getElementById('cancel-btn').addEventListener('click', function () {
   render(); updateUI();
 });
 
-document.getElementById('new-game-btn').addEventListener('click', function () {
-  document.getElementById('gameover-overlay').hidden = true;
+function _resetForNewGame() {
+  document.getElementById('gameover-overlay').hidden  = true;
+  document.getElementById('postgame-controls').hidden = true;
   if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
   aiThinking = false;
   document.getElementById('thinking').textContent = '';
@@ -778,14 +848,29 @@ document.getElementById('new-game-btn').addEventListener('click', function () {
   legalMoves = [];
   resetUI();
   render();
+  document.getElementById('difficulty-section').hidden = true;
   document.getElementById('mode-overlay').hidden = false;
+}
+
+document.getElementById('gameover-close').addEventListener('click', function () {
+  document.getElementById('gameover-overlay').hidden = true;
 });
 
-document.getElementById('mode-hotseat').addEventListener('click', () => startNewGame('hotseat'));
-document.getElementById('mode-ai').addEventListener('click',      () => startNewGame('ai'));
+document.getElementById('new-game-btn').addEventListener('click',      _resetForNewGame);
+document.getElementById('new-game-btn-post').addEventListener('click', _resetForNewGame);
 
-function startNewGame(mode) {
+document.getElementById('mode-hotseat').addEventListener('click', () => startNewGame('hotseat'));
+document.getElementById('mode-ai').addEventListener('click', function () {
+  document.getElementById('difficulty-section').hidden = false;
+});
+document.getElementById('diff-easy').addEventListener('click',   () => startNewGame('ai', 2));
+document.getElementById('diff-medium').addEventListener('click', () => startNewGame('ai', 4));
+document.getElementById('diff-hard').addEventListener('click',   () => startNewGame('ai', 7));
+document.getElementById('diff-expert').addEventListener('click', () => startNewGame('ai', 8));
+
+function startNewGame(mode, depth) {
   gameMode   = mode;
+  if (depth !== undefined) aiDepth = depth;
   aiThinking = false;
   document.getElementById('thinking').textContent = '';
   state      = createGame();
