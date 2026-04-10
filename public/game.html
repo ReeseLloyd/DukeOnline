@@ -210,10 +210,14 @@
     #difficulty-section[hidden] { display: none; }
     #difficulty-section p { opacity: 0.75; font-size: 0.9rem; }
 
-    #diff-hard   { background: #6b2020; border-color: #a04040; }
-    #diff-hard:hover:not(:disabled)   { background: #882828; }
-    #diff-expert { background: #4a1010; border-color: #802020; }
-    #diff-expert:hover:not(:disabled) { background: #621818; }
+    #diff-slider {
+      width: 100%;
+      accent-color: #8a6030;
+      cursor: pointer;
+      margin: 4px 0 2px;
+    }
+
+    #diff-label { color: #d4b483; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -266,13 +270,9 @@
       <button id="mode-ai">vs. AI</button>
     </div>
     <div id="difficulty-section" hidden>
-      <p>Choose difficulty:</p>
-      <div class="btn-row">
-        <button id="diff-easy">Easy</button>
-        <button id="diff-medium">Medium</button>
-        <button id="diff-hard">Hard</button>
-        <button id="diff-expert">Expert</button>
-      </div>
+      <p>Difficulty: <span id="diff-label">4 &#x2014; Medium</span></p>
+      <input type="range" id="diff-slider" min="1" max="8" value="4">
+      <button id="diff-start">Start Game</button>
     </div>
   </div>
 </div>
@@ -344,16 +344,22 @@ let gameMode   = 'hotseat';   // 'hotseat' | 'ai'
 let aiDepth    = 4;           // search depth — set by difficulty selector
 let aiWorker   = null;
 let aiThinking = false;
+let animating  = false;       // true while a move animation is playing
+let animOverlay = null;       // { phase: 0|1, from: [c,r]|null, to: [c,r]|null }
 
 function _applyAIMove(move) {
   aiThinking = false;
   document.getElementById('thinking').textContent = '';
   if (state.phase !== 'active') { render(); updateUI(); return; }
-  if (move) {
-    state      = applyMove(state, move);
+  if (!move) { render(); updateUI(); return; }
+
+  const preState  = state;
+  const postState = applyMove(preState, move);
+  playMoveAnimation(preState, postState, move, function () {
     legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
-  }
-  render(); updateUI();
+    render();
+    updateUI();
+  });
 }
 
 function _runAIOnMainThread() {
@@ -419,6 +425,44 @@ function triggerAI() {
   } else {
     _runAIOnMainThread();
   }
+}
+
+// ─── Move animation ───────────────────────────────────────────────────────────
+
+function _getAnimPositions(move) {
+  if (move.action === 'move')    return { from: move.from,  to: move.to     };
+  if (move.action === 'strike')  return { from: move.from,  to: move.target };
+  if (move.action === 'command') return { from: move.from,  to: move.to     };
+  if (move.action === 'draw')    return { from: move.pos,   to: move.pos    };
+  return { from: null, to: null };
+}
+
+/**
+ * Play a two-phase highlight animation for a move, then call onDone.
+ * Phase 0 (~380 ms): show preState with source cell highlighted yellow.
+ * Phase 1 (~320 ms): show postState with destination cell highlighted green.
+ * After both phases, animating is cleared and onDone() is called.
+ * state is left pointing at postState when onDone fires.
+ */
+function playMoveAnimation(preState, postState, move, onDone) {
+  const { from, to } = _getAnimPositions(move);
+  animating = true;
+
+  state      = preState;
+  animOverlay = { phase: 0, from, to };
+  render();
+
+  setTimeout(function () {
+    state      = postState;
+    animOverlay = { phase: 1, from, to };
+    render();
+
+    setTimeout(function () {
+      animOverlay = null;
+      animating   = false;
+      onDone();
+    }, 320);
+  }, 380);
 }
 
 // ─── UI state ─────────────────────────────────────────────────────────────────
@@ -566,6 +610,25 @@ function render() {
           ctx.strokeRect(x + inset, sy + inset, cellSz - s.lw, cellSz - s.lw);
         }
       }
+
+      // Animation overlay
+      if (animOverlay) {
+        if (animOverlay.phase === 0 &&
+            animOverlay.from && animOverlay.from[0] === c && animOverlay.from[1] === r) {
+          ctx.fillStyle = 'rgba(255, 215, 0, 0.68)';
+          ctx.fillRect(x, sy, cellSz, cellSz);
+        }
+        if (animOverlay.phase === 1) {
+          if (animOverlay.from && animOverlay.from[0] === c && animOverlay.from[1] === r) {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.24)';
+            ctx.fillRect(x, sy, cellSz, cellSz);
+          }
+          if (animOverlay.to && animOverlay.to[0] === c && animOverlay.to[1] === r) {
+            ctx.fillStyle = 'rgba(30, 200, 110, 0.62)';
+            ctx.fillRect(x, sy, cellSz, cellSz);
+          }
+        }
+      }
     }
   }
 
@@ -651,18 +714,13 @@ function updateUI() {
 }
 
 function showGameOver() {
-  const w = state.winner;
-  document.getElementById('gameover-title').textContent =
-    `Player ${w + 1} (${PLAYER_NAMES[w]}) wins!`;
-  document.getElementById('gameover-msg').textContent = 'The Duke has been captured.';
-  document.getElementById('gameover-overlay').hidden  = false;
   document.getElementById('postgame-controls').hidden = false;
 }
 
 // ─── Board click handling ─────────────────────────────────────────────────────
 
 canvas.addEventListener('click', function (evt) {
-  if (aiThinking) return;
+  if (aiThinking || animating) return;
   const rect   = canvas.getBoundingClientRect();
   const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -675,7 +733,7 @@ canvas.addEventListener('click', function (evt) {
 });
 
 canvas.addEventListener('mousemove', function (evt) {
-  if (state.phase === 'gameover') { canvas.style.cursor = 'default'; return; }
+  if (state.phase === 'gameover' || animating) { canvas.style.cursor = 'default'; return; }
   const rect   = canvas.getBoundingClientRect();
   const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -718,7 +776,7 @@ function handleClick(col, row) {
   // ── Draw placement mode ─────────────────────────────────────────────────────
   if (uiMode === 'draw') {
     const m = legalMoves.find(m => m.action === 'draw' && m.pos[0] === col && m.pos[1] === row);
-    if (m) { commitMove(m); render(); updateUI(); }
+    if (m) { commitMove(m); }
     // No cancel: the player has committed to drawing this turn.
     return;
   }
@@ -733,8 +791,7 @@ function handleClick(col, row) {
       m.from[0] === fc && m.from[1] === fr &&
       m.to[0] === col && m.to[1] === row
     );
-    if (m) commitMove(m); else resetUI();
-    render(); updateUI();
+    if (m) { commitMove(m); } else { resetUI(); render(); updateUI(); }
     return;
   }
 
@@ -762,8 +819,8 @@ function handleClick(col, row) {
       m.from[0] === col && m.from[1] === row
     );
 
-    if (moveM)   { commitMove(moveM);   render(); updateUI(); return; }
-    if (strikeM) { commitMove(strikeM); render(); updateUI(); return; }
+    if (moveM)   { commitMove(moveM);   return; }
+    if (strikeM) { commitMove(strikeM); return; }
 
     if (cmdFromM) {
       // Transition to command-destination selection
@@ -805,10 +862,16 @@ function trySelect(col, row) {
 }
 
 function commitMove(move) {
-  state      = applyMove(state, move);
-  legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+  const preState  = state;
+  const postState = applyMove(preState, move);
   resetUI();
-  triggerAI();
+  playMoveAnimation(preState, postState, move, function () {
+    // state is already postState (set by playMoveAnimation)
+    legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+    render();
+    updateUI();
+    triggerAI();
+  });
 }
 
 // ─── Button handlers ──────────────────────────────────────────────────────────
@@ -863,10 +926,18 @@ document.getElementById('mode-hotseat').addEventListener('click', () => startNew
 document.getElementById('mode-ai').addEventListener('click', function () {
   document.getElementById('difficulty-section').hidden = false;
 });
-document.getElementById('diff-easy').addEventListener('click',   () => startNewGame('ai', 2));
-document.getElementById('diff-medium').addEventListener('click', () => startNewGame('ai', 4));
-document.getElementById('diff-hard').addEventListener('click',   () => startNewGame('ai', 7));
-document.getElementById('diff-expert').addEventListener('click', () => startNewGame('ai', 8));
+function _diffLabel(d) {
+  const name = d <= 2 ? 'Easy' : d <= 5 ? 'Medium' : d <= 7 ? 'Hard' : 'Expert';
+  return d + ' \u2014 ' + name;
+}
+
+document.getElementById('diff-slider').addEventListener('input', function () {
+  document.getElementById('diff-label').textContent = _diffLabel(parseInt(this.value));
+});
+
+document.getElementById('diff-start').addEventListener('click', function () {
+  startNewGame('ai', parseInt(document.getElementById('diff-slider').value));
+});
 
 function startNewGame(mode, depth) {
   gameMode   = mode;
@@ -883,6 +954,20 @@ function startNewGame(mode, depth) {
   document.getElementById('mode-overlay').hidden = true;
   render(); updateUI();
 }
+
+// ─── Favicon ──────────────────────────────────────────────────────────────────
+
+(function () {
+  const sz = 128;
+  const fc = document.createElement('canvas');
+  fc.width = sz; fc.height = sz;
+  drawTile(fc.getContext('2d'), 0, 0, sz, 'duke', 0, 0);
+  const link = document.createElement('link');
+  link.rel  = 'icon';
+  link.type = 'image/png';
+  link.href = fc.toDataURL('image/png');
+  document.head.appendChild(link);
+}());
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
