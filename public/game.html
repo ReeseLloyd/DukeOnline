@@ -277,6 +277,7 @@
 
 <div id="postgame-controls" hidden>
   <button id="new-game-btn-post">New Game</button>
+  <button id="lobby-btn-post">Return to Lobby</button>
 </div>
 
 <div id="thinking"></div>
@@ -410,6 +411,26 @@ const _myPlayerIndex    = _onlineMode ? parseInt(_onlinePlayerStr) : null;
 let _ignoreNextSnapshot = false;  // skip the echo of our own Firestore write
 let _onlineUnsub        = null;   // Firestore listener unsubscribe fn
 
+// ─── Clipboard helper ─────────────────────────────────────────────────────────
+// execCommand works without page focus; Clipboard API used as fallback only.
+
+function _copyToClipboard(text, btn, originalLabel) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) {}
+  document.body.removeChild(ta);
+  if (!ok && navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    ok = true;
+  }
+  btn.textContent = ok ? 'Copied!' : 'Copy failed';
+  setTimeout(() => { btn.textContent = originalLabel; }, 1800);
+}
+
 // ─── Online helpers ───────────────────────────────────────────────────────────
 
 /** True when it is this client's turn to act. Always true in offline modes. */
@@ -503,10 +524,7 @@ async function _initOnlineGame() {
     document.getElementById('mode-overlay').hidden      = true;
 
     document.getElementById('waiting-copy-btn').addEventListener('click', function () {
-      navigator.clipboard.writeText(_onlineCode).then(() => {
-        this.textContent = 'Copied!';
-        setTimeout(() => { this.textContent = 'Copy Code'; }, 1800);
-      }).catch(() => {});
+      _copyToClipboard(_onlineCode, this, 'Copy Code');
     });
   } else {
     // Player 1: game is already active, start immediately.
@@ -1125,6 +1143,10 @@ document.getElementById('gameover-close').addEventListener('click', function () 
 
 document.getElementById('new-game-btn').addEventListener('click',      _resetForNewGame);
 document.getElementById('new-game-btn-post').addEventListener('click', _resetForNewGame);
+document.getElementById('lobby-btn-post').addEventListener('click', function () {
+  if (_onlineUnsub) _onlineUnsub();
+  window.location.href = 'index.html';
+});
 
 document.getElementById('mode-hotseat').addEventListener('click', () => startNewGame('hotseat'));
 document.getElementById('mode-ai').addEventListener('click', function () {

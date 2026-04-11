@@ -291,21 +291,31 @@ document.getElementById('create-btn').addEventListener('click', async function (
   }
 });
 
+// ─── Copy helper ─────────────────────────────────────────────────────────────
+// Uses execCommand (works without page focus) with Clipboard API as backup.
+
+function _copyText(text, btn, originalLabel) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) {}
+  document.body.removeChild(ta);
+  if (!ok && navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    ok = true;
+  }
+  btn.textContent = ok ? 'Copied!' : 'Copy failed';
+  setTimeout(() => { btn.textContent = originalLabel; }, 1800);
+}
+
 // ─── Copy code ────────────────────────────────────────────────────────────────
 
 document.getElementById('copy-btn').addEventListener('click', function () {
   if (!_createCode) return;
-  navigator.clipboard.writeText(_createCode).then(() => {
-    this.textContent = 'Copied!';
-    setTimeout(() => { this.textContent = 'Copy'; }, 1800);
-  }).catch(() => {
-    // Fallback: select the text for manual copy
-    const el = document.getElementById('code-value');
-    const range = document.createRange();
-    range.selectNode(el);
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-  });
+  _copyText(_createCode, this, 'Copy');
 });
 
 // ─── Enter game (player 0) ────────────────────────────────────────────────────
