@@ -8,8 +8,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #2a1f0e;
-      color: #e8d9c0;
+      background: #1a0f2e;
+      color: #ede0c8;
       font-family: Georgia, 'Times New Roman', serif;
       display: flex;
       flex-direction: column;
@@ -22,14 +22,14 @@
     h1 {
       font-size: 1.6rem;
       letter-spacing: 0.08em;
-      color: #d4b483;
+      color: #c8a020;
     }
 
     /* ── Panels ──────────────────────────────────────────────────────────────── */
 
     .card {
-      background: #3a2a10;
-      border: 1px solid #6a4e22;
+      background: #271545;
+      border: 1px solid #5a3a80;
       border-radius: 8px;
       padding: 24px 28px;
       width: min(360px, 100%);
@@ -41,17 +41,17 @@
     .card h2 {
       font-size: 1.05rem;
       letter-spacing: 0.04em;
-      color: #d4b483;
-      border-bottom: 1px solid #5a3e1a;
+      color: #c8a020;
+      border-bottom: 1px solid #3a2060;
       padding-bottom: 10px;
     }
 
     /* ── Buttons ─────────────────────────────────────────────────────────────── */
 
     button {
-      background: #5c3d1a;
-      color: #e8d9c0;
-      border: 1px solid #8a6030;
+      background: #3d1f6a;
+      color: #ede0c8;
+      border: 1px solid #7a50a0;
       border-radius: 4px;
       padding: 9px 18px;
       font-family: inherit;
@@ -61,7 +61,7 @@
       width: 100%;
     }
 
-    button:hover:not(:disabled) { background: #7a5225; }
+    button:hover:not(:disabled) { background: #5a3090; }
     button:disabled { opacity: 0.38; cursor: default; }
 
     /* ── Join row ────────────────────────────────────────────────────────────── */
@@ -73,9 +73,9 @@
 
     .join-row input {
       flex: 1;
-      background: #2a1f0e;
-      color: #e8d9c0;
-      border: 1px solid #6a4e22;
+      background: #1a0f2e;
+      color: #ede0c8;
+      border: 1px solid #5a3a80;
       border-radius: 4px;
       padding: 8px 10px;
       font-family: 'Courier New', Courier, monospace;
@@ -84,8 +84,8 @@
       text-transform: uppercase;
     }
 
-    .join-row input::placeholder { color: #7a6040; letter-spacing: 0.05em; font-size: 0.85rem; }
-    .join-row input:focus { outline: 1px solid #8a6030; }
+    .join-row input::placeholder { color: #6a5080; letter-spacing: 0.05em; font-size: 0.85rem; }
+    .join-row input:focus { outline: 1px solid #7a50a0; }
 
     .join-row button { width: auto; padding: 8px 16px; }
 
@@ -115,12 +115,12 @@
       flex: 1;
       font-size: 2rem;
       letter-spacing: 0.3em;
-      color: #d4b483;
+      color: #c8a020;
       font-family: 'Courier New', Courier, monospace;
       text-align: center;
       padding: 10px 12px;
-      background: rgba(0,0,0,0.25);
-      border: 1px solid #8a6030;
+      background: rgba(0,0,0,0.30);
+      border: 1px solid #7a50a0;
       border-radius: 6px;
     }
 
@@ -143,7 +143,7 @@
     #waiting-status.joined {
       opacity: 1;
       font-style: normal;
-      color: #80c880;
+      color: #70c870;
     }
 
     /* ── Player name ─────────────────────────────────────────────────────────── */
@@ -161,9 +161,9 @@
     .name-row label { white-space: nowrap; }
 
     .name-row input {
-      background: #2a1f0e;
-      color: #e8d9c0;
-      border: 1px solid #4a3a1e;
+      background: #1a0f2e;
+      color: #ede0c8;
+      border: 1px solid #3a2060;
       border-radius: 4px;
       padding: 6px 10px;
       font-family: inherit;
@@ -171,7 +171,7 @@
       width: 160px;
     }
 
-    .name-row input:focus { outline: 1px solid #8a6030; }
+    .name-row input:focus { outline: 1px solid #7a50a0; }
 
     /* ── Divider ─────────────────────────────────────────────────────────────── */
 
@@ -186,6 +186,89 @@
 
     .btn-row { display: flex; gap: 10px; }
     .btn-row button { flex: 1; }
+
+    /* ── Version string ──────────────────────────────────────────────────────── */
+
+    .version {
+      font-size: 0.68rem;
+      font-family: 'Courier New', Courier, monospace;
+      letter-spacing: 0.05em;
+      opacity: 0.28;
+      margin-top: 8px;
+    }
+
+    /* ── My Games ────────────────────────────────────────────────────────────── */
+
+    .game-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 10px 0;
+      border-bottom: 1px solid #3a2060;
+    }
+
+    .game-row:first-child { padding-top: 0; }
+    .game-row:last-child  { border-bottom: none; padding-bottom: 0; }
+
+    .game-row-top {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .game-code {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.95rem;
+      letter-spacing: 0.12em;
+      color: #c8a020;
+      flex-shrink: 0;
+    }
+
+    .game-opponent {
+      font-size: 0.85rem;
+      opacity: 0.80;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .game-row-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .game-badge {
+      font-size: 0.70rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 3px;
+    }
+
+    .badge-waiting  { background: rgba(255,255,255,0.06); color: #8a7aaa; }
+    .badge-active   { background: rgba(200,160,32,0.15);  color: #c8a020; }
+    .badge-gameover { background: rgba(255,255,255,0.06); color: #6a5a8a; }
+
+    .game-actions { display: flex; gap: 6px; align-items: center; }
+
+    .btn-sm { width: auto; padding: 4px 12px; font-size: 0.78rem; }
+
+    .btn-remove {
+      width: auto;
+      background: none;
+      border: none;
+      color: #ede0c8;
+      opacity: 0.35;
+      padding: 4px 6px;
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .btn-remove:hover { opacity: 0.8; background: none; }
+
+    #my-games-loading { font-size: 0.82rem; opacity: 0.50; font-style: italic; }
   </style>
 </head>
 <body>
@@ -196,6 +279,14 @@
   <label for="player-name">Your name:</label>
   <input type="text" id="player-name" placeholder="Anonymous" maxlength="20"
          autocomplete="off" spellcheck="false">
+</div>
+
+<!-- My Games (hidden until populated) -->
+<div class="card" id="my-games-card" hidden>
+  <h2>My Games</h2>
+  <div id="my-games-body">
+    <div id="my-games-loading">Loading&hellip;</div>
+  </div>
 </div>
 
 <!-- Online: default view -->
@@ -269,6 +360,104 @@ function _playerName() {
   return localStorage.getItem('duke_player_name') || '';
 }
 
+// ─── My Games — localStorage helpers ─────────────────────────────────────────
+
+function _loadMyGames() {
+  try { return JSON.parse(localStorage.getItem('duke_my_games') || '[]'); }
+  catch (_) { return []; }
+}
+
+function _saveMyGames(list) {
+  localStorage.setItem('duke_my_games', JSON.stringify(list));
+}
+
+function saveMyGame(code, player, seed) {
+  const list = _loadMyGames().filter(g => g.code !== code); // dedupe
+  list.unshift({ code, player, seed });                      // newest first
+  _saveMyGames(list.slice(0, 20));
+}
+
+function removeMyGame(code) {
+  _saveMyGames(_loadMyGames().filter(g => g.code !== code));
+  renderMyGames();
+}
+
+async function renderMyGames() {
+  const list = _loadMyGames();
+  const card = document.getElementById('my-games-card');
+  const body = document.getElementById('my-games-body');
+
+  if (list.length === 0) { card.hidden = true; return; }
+  card.hidden = false;
+  body.innerHTML = '<div id="my-games-loading">Loading\u2026</div>';
+
+  let fetched;
+  try {
+    const db = firebase.firestore();
+    fetched = await Promise.all(list.map(async g => {
+      try {
+        const snap = await db.collection('games').doc(g.code).get();
+        if (!snap.exists) return { ...g, _dead: true };
+        const d = snap.data();
+        const opponentName = g.player === 0 ? (d.player1name || '') : (d.player0name || '');
+        return { ...g, status: d.status, opponentName };
+      } catch (_) {
+        return { ...g, status: 'unknown', opponentName: '' };
+      }
+    }));
+  } catch (_) {
+    // Firebase not ready — show list without live status
+    fetched = list.map(g => ({ ...g, status: 'unknown', opponentName: '' }));
+  }
+
+  // Silently remove games that no longer exist in Firestore
+  const dead = fetched.filter(g => g._dead).map(g => g.code);
+  if (dead.length) {
+    _saveMyGames(_loadMyGames().filter(g => !dead.includes(g.code)));
+    fetched = fetched.filter(g => !g._dead);
+  }
+
+  body.innerHTML = '';
+  if (fetched.length === 0) { card.hidden = true; return; }
+
+  const STATUS_LABEL = { waiting: 'Waiting', active: 'In Progress', gameover: 'Finished', unknown: '' };
+  const STATUS_CLASS = { waiting: 'badge-waiting', active: 'badge-active', gameover: 'badge-gameover', unknown: 'badge-waiting' };
+
+  fetched.forEach(g => {
+    const label   = STATUS_LABEL[g.status] ?? '';
+    const cls     = STATUS_CLASS[g.status]  ?? 'badge-waiting';
+    const oppText = g.opponentName
+      ? 'vs.\u00a0' + g.opponentName
+      : (g.status === 'waiting' ? 'Waiting for opponent\u2026' : '');
+
+    const row = document.createElement('div');
+    row.className = 'game-row';
+    row.innerHTML =
+      '<div class="game-row-top">'
+      +   '<span class="game-code"></span>'
+      +   '<span class="game-opponent"></span>'
+      + '</div>'
+      + '<div class="game-row-bottom">'
+      +   (label ? '<span class="game-badge ' + cls + '"></span>' : '<span></span>')
+      +   '<div class="game-actions">'
+      +     '<button class="btn-sm game-rejoin">Rejoin</button>'
+      +     '<button class="btn-remove game-remove" title="Remove">\u00d7</button>'
+      +   '</div>'
+      + '</div>';
+
+    row.querySelector('.game-code').textContent     = g.code;
+    row.querySelector('.game-opponent').textContent = oppText;
+    if (label) row.querySelector('.game-badge').textContent = label;
+
+    row.querySelector('.game-rejoin').addEventListener('click', () => {
+      window.location.href = 'game.html?code=' + g.code + '&player=' + g.player + '&seed=' + g.seed;
+    });
+    row.querySelector('.game-remove').addEventListener('click', () => removeMyGame(g.code));
+
+    body.appendChild(row);
+  });
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let _createCode   = null;   // code for the game we just created
@@ -311,6 +500,7 @@ document.getElementById('create-btn').addEventListener('click', async function (
 
     const { code } = await createOnlineGame(_createSeed, _createFP, _playerName());
     _createCode = code;
+    saveMyGame(code, 0, _createSeed);
 
     // Switch to "code sharing" panel
     document.getElementById('online-card').hidden  = true;
@@ -409,6 +599,7 @@ async function handleJoin() {
       return;
     }
 
+    saveMyGame(raw, 1, result.seed);
     window.location.href =
       `game.html?code=${raw}&player=1&seed=${result.seed}`;
 
@@ -425,6 +616,15 @@ document.getElementById('local-btn').addEventListener('click', function () {
   window.location.href = 'game.html';
 });
 
+// ─── Eager init + render My Games ─────────────────────────────────────────────
+
+(async () => {
+  try { await initFirebase(); } catch (_) {}
+  renderMyGames();
+})();
+
 </script>
+
+<div class="version">2026.04.11.01</div>
 </body>
 </html>

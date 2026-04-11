@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duke Online — Theme Comparison</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: Georgia, 'Times New Roman', serif;
+      padding: 32px 20px 60px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.4rem;
+      letter-spacing: 0.06em;
+      color: #ddd;
+      margin-bottom: 8px;
+    }
+
+    .meta {
+      text-align: center;
+      font-size: 0.82rem;
+      color: #777;
+      margin-bottom: 36px;
+    }
+
+    /* ── Theme grid ─────────────────────────────────────────────────────────── */
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Each theme column ──────────────────────────────────────────────────── */
+
+    .theme-col {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #333;
+    }
+
+    .theme-label {
+      padding: 10px 14px;
+      background: #1e1e1e;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #999;
+      border-bottom: 1px solid #333;
+    }
+
+    .theme-label strong {
+      display: block;
+      font-size: 0.9rem;
+      color: #eee;
+      margin-bottom: 2px;
+      letter-spacing: 0.04em;
+      text-transform: none;
+    }
+
+    /* ── Theme "skin" container ─────────────────────────────────────────────── */
+
+    .theme-body {
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       THEME DEFINITIONS — each .t-X class sets CSS custom properties
+       that all the component classes read from.
+       ════════════════════════════════════════════════════════════════════════ */
+
+    /* Current — warm brown */
+    .t-current {
+      --bg:           #2a1f0e;
+      --card-bg:      #3a2a10;
+      --card-border:  #6a4e22;
+      --panel-bg:     #3a2a10;
+      --panel-border: #8a6030;
+      --overlay-bg:   rgba(15, 9, 2, 0.82);
+      --text:         #e8d9c0;
+      --accent:       #d4b483;
+      --btn-bg:       #5c3d1a;
+      --btn-border:   #8a6030;
+      --btn-hover:    #7a5225;
+      --input-bg:     #2a1f0e;
+      --input-border: #6a4e22;
+      --input-focus:  #8a6030;
+      --code-bg:      rgba(0,0,0,0.25);
+      --code-border:  #8a6030;
+      --success:      #80c880;
+      --error:        #d46060;
+      --divider:      rgba(255,255,255,0.08);
+      --slider-accent:#8a6030;
+    }
+
+    /* Option A — Royal Purple */
+    .t-purple {
+      --bg:           #1a0f2e;
+      --card-bg:      #271545;
+      --card-border:  #5a3a80;
+      --panel-bg:     #271545;
+      --panel-border: #7a50a0;
+      --overlay-bg:   rgba(10, 5, 22, 0.85);
+      --text:         #ede0c8;
+      --accent:       #c8a020;
+      --btn-bg:       #3d1f6a;
+      --btn-border:   #7a50a0;
+      --btn-hover:    #5a3090;
+      --input-bg:     #1a0f2e;
+      --input-border: #4a2a6e;
+      --input-focus:  #7a50a0;
+      --code-bg:      rgba(0,0,0,0.30);
+      --code-border:  #7a50a0;
+      --success:      #70c870;
+      --error:        #d46060;
+      --divider:      rgba(255,255,255,0.08);
+      --slider-accent:#7a50a0;
+    }
+
+    /* Option B — Crimson & Gold */
+    .t-crimson {
+      --bg:           #1a0808;
+      --card-bg:      #2e1010;
+      --card-border:  #7a2020;
+      --panel-bg:     #2e1010;
+      --panel-border: #9e2828;
+      --overlay-bg:   rgba(15, 3, 3, 0.85);
+      --text:         #f0e0c0;
+      --accent:       #d4a820;
+      --btn-bg:       #6a1818;
+      --btn-border:   #9e2828;
+      --btn-hover:    #8a2020;
+      --input-bg:     #1a0808;
+      --input-border: #5a1818;
+      --input-focus:  #9e2828;
+      --code-bg:      rgba(0,0,0,0.30);
+      --code-border:  #9e2828;
+      --success:      #70c870;
+      --error:        #e07070;
+      --divider:      rgba(255,255,255,0.08);
+      --slider-accent:#9e2828;
+    }
+
+    /* Option C — Purple + Crimson + Blue */
+    .t-tricolor {
+      --bg:           #1a0f2e;
+      --card-bg:      #221340;
+      --card-border:  #4a2a6e;
+      --panel-bg:     #221340;
+      --panel-border: #6a3a8e;
+      --overlay-bg:   rgba(10, 5, 22, 0.85);
+      --text:         #ede0c8;
+      --accent:       #c8a020;
+      --btn-bg:       #7a1a1a;
+      --btn-border:   #aa3030;
+      --btn-hover:    #9e2424;
+      --input-bg:     #1a0f2e;
+      --input-border: #3a2060;
+      --input-focus:  #6a3a8e;
+      --code-bg:      rgba(0,0,0,0.30);
+      --code-border:  #6a3a8e;
+      --success:      #4a70c8;
+      --error:        #d46060;
+      --divider:      rgba(255,255,255,0.08);
+      --slider-accent:#aa3030;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       COMPONENTS — all use var() so they work in any theme
+       ════════════════════════════════════════════════════════════════════════ */
+
+    .t-body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, 'Times New Roman', serif;
+    }
+
+    .t-h1 {
+      font-size: 1.3rem;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      text-align: center;
+    }
+
+    .t-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .t-card h2 {
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+    }
+
+    .t-btn {
+      background: var(--btn-bg);
+      color: var(--text);
+      border: 1px solid var(--btn-border);
+      border-radius: 4px;
+      padding: 8px 14px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.15s;
+    }
+
+    .t-btn:hover { background: var(--btn-hover); }
+
+    .t-btn.secondary {
+      opacity: 0.7;
+    }
+
+    .t-join-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .t-input {
+      flex: 1;
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      padding: 7px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      outline: none;
+      min-width: 0;
+    }
+
+    .t-input:focus { border-color: var(--input-focus); }
+
+    .t-join-row .t-btn { width: auto; padding: 7px 14px; }
+
+    .t-code-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .t-code-val {
+      flex: 1;
+      font-size: 1.5rem;
+      letter-spacing: 0.28em;
+      color: var(--accent);
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      padding: 8px 10px;
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 6px;
+    }
+
+    .t-code-box .t-btn { width: auto; padding: 7px 12px; font-size: 0.8rem; }
+
+    .t-status {
+      font-size: 0.82rem;
+      text-align: center;
+      font-style: italic;
+      opacity: 0.7;
+    }
+
+    .t-status.joined {
+      opacity: 1;
+      font-style: normal;
+      color: var(--success);
+    }
+
+    .t-error { font-size: 0.8rem; color: var(--error); min-height: 1em; }
+
+    .t-divider {
+      font-size: 0.75rem;
+      opacity: 0.4;
+      letter-spacing: 0.1em;
+      text-align: center;
+    }
+
+    .t-name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+
+    .t-name-input {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      width: 120px;
+      outline: none;
+    }
+
+    /* Panel (game-over / waiting) */
+    .t-panel {
+      background: var(--panel-bg);
+      border: 2px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 20px 22px;
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .t-panel h2 { color: var(--accent); font-size: 1.1rem; }
+    .t-panel p  { font-size: 0.85rem; opacity: 0.8; line-height: 1.5; }
+
+    .t-panel .t-btn { align-self: center; width: auto; padding: 8px 22px; }
+
+    .t-btn-row { display: flex; gap: 8px; justify-content: center; }
+    .t-btn-row .t-btn { width: auto; }
+
+    /* Status bar (in-game) */
+    .t-status-bar {
+      text-align: center;
+      font-size: 0.92rem;
+    }
+
+    .t-status-bar .player { font-weight: bold; color: var(--accent); }
+    .t-status-bar .msg    { font-size: 0.8rem; opacity: 0.7; margin-top: 2px; }
+
+    /* Draw preview strip */
+    .t-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      width: 100%;
+    }
+
+    .t-preview-tile {
+      width: 56px;
+      height: 56px;
+      border-radius: 4px;
+      background: #c8b890;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: #3a2a10;
+      font-weight: bold;
+    }
+
+    .t-preview-name { font-size: 0.9rem; font-weight: bold; color: var(--accent); }
+    .t-preview-hint { font-size: 0.75rem; opacity: 0.65; }
+
+    .t-slider {
+      width: 100%;
+      accent-color: var(--slider-accent);
+    }
+
+    .t-thinking {
+      font-size: 0.82rem;
+      opacity: 0.6;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Section label within each column ──────────────────────────────────── */
+
+    .section-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #555;
+      align-self: flex-start;
+      margin-top: 8px;
+      padding-bottom: 2px;
+      border-bottom: 1px solid #2a2a2a;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<h1>The Duke — Theme Comparison</h1>
+<p class="meta">Current theme vs. three proposed options. Tile designs unchanged.</p>
+
+<div class="grid">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       COLUMN 1 — Current (warm brown)
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="theme-col">
+    <div class="theme-label">
+      <strong>Current</strong>
+      Warm brown / parchment
+    </div>
+    <div class="theme-body t-body t-current">
+
+      <div class="t-h1">The Duke</div>
+
+      <div class="section-label">Lobby</div>
+
+      <div class="t-name-row">
+        <label>Your name:</label>
+        <input class="t-name-input" value="Reese" readonly>
+      </div>
+
+      <div class="t-card">
+        <h2>Play Online</h2>
+        <button class="t-btn">Create Game</button>
+        <div class="t-join-row">
+          <input class="t-input" value="XKQR4W" readonly>
+          <button class="t-btn">Join</button>
+        </div>
+        <div class="t-error"></div>
+      </div>
+
+      <div class="t-divider">— or —</div>
+
+      <div class="t-card">
+        <h2>Play Locally</h2>
+        <button class="t-btn">Local Game</button>
+      </div>
+
+      <div class="section-label">After "Create Game"</div>
+
+      <div class="t-card">
+        <h2>Game Created</h2>
+        <p style="font-size:0.8rem;opacity:0.65;text-align:center">Share this code:</p>
+        <div class="t-code-box">
+          <div class="t-code-val">XKQR4W</div>
+          <button class="t-btn">Copy</button>
+        </div>
+        <div class="t-status joined">Opponent joined — ready to play!</div>
+        <button class="t-btn">Enter Game</button>
+        <button class="t-btn secondary">Cancel</button>
+      </div>
+
+      <div class="section-label">In-game</div>
+
+      <div class="t-status-bar">
+        <div class="player">White's turn</div>
+        <div class="msg">Select a tile to move, or draw from bag</div>
+      </div>
+
+      <div class="t-preview">
+        <div class="t-preview-tile">Pikeman</div>
+        <div>
+          <div class="t-preview-name">Pikeman</div>
+          <div class="t-preview-hint">Click a highlighted square to place it.</div>
+        </div>
+      </div>
+
+      <div style="width:100%;display:flex;gap:8px">
+        <button class="t-btn" style="flex:1">Draw from Bag</button>
+        <button class="t-btn secondary" style="flex:1">Cancel</button>
+      </div>
+
+      <div class="t-thinking">AI is thinking…</div>
+
+      <div class="section-label">Game over / waiting overlays</div>
+
+      <div class="t-panel">
+        <h2>White Wins!</h2>
+        <p>The Duke has been captured.<br>Well played.</p>
+        <div class="t-btn-row">
+          <button class="t-btn">New Game</button>
+          <button class="t-btn secondary">Lobby</button>
+        </div>
+      </div>
+
+      <div class="t-panel">
+        <h2>Waiting for Opponent</h2>
+        <p style="opacity:0.7;font-size:0.85rem">Share this code:</p>
+        <div class="t-code-val">XKQR4W</div>
+        <button class="t-btn" style="align-self:center;width:auto;padding:7px 18px">Copy Code</button>
+        <div class="t-status">Waiting for your opponent to join…</div>
+      </div>
+
+      <div class="section-label">Difficulty slider</div>
+      <div class="t-card">
+        <p style="font-size:0.85rem;opacity:0.75">Difficulty: <strong style="color:var(--accent)">4 — Medium</strong></p>
+        <input type="range" class="t-slider" min="1" max="8" value="4">
+        <button class="t-btn">Start Game</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       COLUMN 2 — Option A: Royal Purple
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="theme-col">
+    <div class="theme-label">
+      <strong>A — Royal Purple</strong>
+      Box-faithful deep purple + gold
+    </div>
+    <div class="theme-body t-body t-purple">
+
+      <div class="t-h1">The Duke</div>
+
+      <div class="section-label">Lobby</div>
+
+      <div class="t-name-row">
+        <label>Your name:</label>
+        <input class="t-name-input" value="Reese" readonly>
+      </div>
+
+      <div class="t-card">
+        <h2>Play Online</h2>
+        <button class="t-btn">Create Game</button>
+        <div class="t-join-row">
+          <input class="t-input" value="XKQR4W" readonly>
+          <button class="t-btn">Join</button>
+        </div>
+        <div class="t-error"></div>
+      </div>
+
+      <div class="t-divider">— or —</div>
+
+      <div class="t-card">
+        <h2>Play Locally</h2>
+        <button class="t-btn">Local Game</button>
+      </div>
+
+      <div class="section-label">After "Create Game"</div>
+
+      <div class="t-card">
+        <h2>Game Created</h2>
+        <p style="font-size:0.8rem;opacity:0.65;text-align:center">Share this code:</p>
+        <div class="t-code-box">
+          <div class="t-code-val">XKQR4W</div>
+          <button class="t-btn">Copy</button>
+        </div>
+        <div class="t-status joined">Opponent joined — ready to play!</div>
+        <button class="t-btn">Enter Game</button>
+        <button class="t-btn secondary">Cancel</button>
+      </div>
+
+      <div class="section-label">In-game</div>
+
+      <div class="t-status-bar">
+        <div class="player">White's turn</div>
+        <div class="msg">Select a tile to move, or draw from bag</div>
+      </div>
+
+      <div class="t-preview">
+        <div class="t-preview-tile">Pikeman</div>
+        <div>
+          <div class="t-preview-name">Pikeman</div>
+          <div class="t-preview-hint">Click a highlighted square to place it.</div>
+        </div>
+      </div>
+
+      <div style="width:100%;display:flex;gap:8px">
+        <button class="t-btn" style="flex:1">Draw from Bag</button>
+        <button class="t-btn secondary" style="flex:1">Cancel</button>
+      </div>
+
+      <div class="t-thinking">AI is thinking…</div>
+
+      <div class="section-label">Game over / waiting overlays</div>
+
+      <div class="t-panel">
+        <h2>White Wins!</h2>
+        <p>The Duke has been captured.<br>Well played.</p>
+        <div class="t-btn-row">
+          <button class="t-btn">New Game</button>
+          <button class="t-btn secondary">Lobby</button>
+        </div>
+      </div>
+
+      <div class="t-panel">
+        <h2>Waiting for Opponent</h2>
+        <p style="opacity:0.7;font-size:0.85rem">Share this code:</p>
+        <div class="t-code-val">XKQR4W</div>
+        <button class="t-btn" style="align-self:center;width:auto;padding:7px 18px">Copy Code</button>
+        <div class="t-status">Waiting for your opponent to join…</div>
+      </div>
+
+      <div class="section-label">Difficulty slider</div>
+      <div class="t-card">
+        <p style="font-size:0.85rem;opacity:0.75">Difficulty: <strong style="color:var(--accent)">4 — Medium</strong></p>
+        <input type="range" class="t-slider" min="1" max="8" value="4">
+        <button class="t-btn">Start Game</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       COLUMN 3 — Option B: Crimson & Gold
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="theme-col">
+    <div class="theme-label">
+      <strong>B — Crimson &amp; Gold</strong>
+      Heraldic red banner, bold gold
+    </div>
+    <div class="theme-body t-body t-crimson">
+
+      <div class="t-h1">The Duke</div>
+
+      <div class="section-label">Lobby</div>
+
+      <div class="t-name-row">
+        <label>Your name:</label>
+        <input class="t-name-input" value="Reese" readonly>
+      </div>
+
+      <div class="t-card">
+        <h2>Play Online</h2>
+        <button class="t-btn">Create Game</button>
+        <div class="t-join-row">
+          <input class="t-input" value="XKQR4W" readonly>
+          <button class="t-btn">Join</button>
+        </div>
+        <div class="t-error"></div>
+      </div>
+
+      <div class="t-divider">— or —</div>
+
+      <div class="t-card">
+        <h2>Play Locally</h2>
+        <button class="t-btn">Local Game</button>
+      </div>
+
+      <div class="section-label">After "Create Game"</div>
+
+      <div class="t-card">
+        <h2>Game Created</h2>
+        <p style="font-size:0.8rem;opacity:0.65;text-align:center">Share this code:</p>
+        <div class="t-code-box">
+          <div class="t-code-val">XKQR4W</div>
+          <button class="t-btn">Copy</button>
+        </div>
+        <div class="t-status joined">Opponent joined — ready to play!</div>
+        <button class="t-btn">Enter Game</button>
+        <button class="t-btn secondary">Cancel</button>
+      </div>
+
+      <div class="section-label">In-game</div>
+
+      <div class="t-status-bar">
+        <div class="player">White's turn</div>
+        <div class="msg">Select a tile to move, or draw from bag</div>
+      </div>
+
+      <div class="t-preview">
+        <div class="t-preview-tile">Pikeman</div>
+        <div>
+          <div class="t-preview-name">Pikeman</div>
+          <div class="t-preview-hint">Click a highlighted square to place it.</div>
+        </div>
+      </div>
+
+      <div style="width:100%;display:flex;gap:8px">
+        <button class="t-btn" style="flex:1">Draw from Bag</button>
+        <button class="t-btn secondary" style="flex:1">Cancel</button>
+      </div>
+
+      <div class="t-thinking">AI is thinking…</div>
+
+      <div class="section-label">Game over / waiting overlays</div>
+
+      <div class="t-panel">
+        <h2>White Wins!</h2>
+        <p>The Duke has been captured.<br>Well played.</p>
+        <div class="t-btn-row">
+          <button class="t-btn">New Game</button>
+          <button class="t-btn secondary">Lobby</button>
+        </div>
+      </div>
+
+      <div class="t-panel">
+        <h2>Waiting for Opponent</h2>
+        <p style="opacity:0.7;font-size:0.85rem">Share this code:</p>
+        <div class="t-code-val">XKQR4W</div>
+        <button class="t-btn" style="align-self:center;width:auto;padding:7px 18px">Copy Code</button>
+        <div class="t-status">Waiting for your opponent to join…</div>
+      </div>
+
+      <div class="section-label">Difficulty slider</div>
+      <div class="t-card">
+        <p style="font-size:0.85rem;opacity:0.75">Difficulty: <strong style="color:var(--accent)">4 — Medium</strong></p>
+        <input type="range" class="t-slider" min="1" max="8" value="4">
+        <button class="t-btn">Start Game</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       COLUMN 4 — Option C: Purple + Crimson + Blue
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="theme-col">
+    <div class="theme-label">
+      <strong>C — Full Coat of Arms</strong>
+      Purple bg, crimson buttons, blue accents
+    </div>
+    <div class="theme-body t-body t-tricolor">
+
+      <div class="t-h1">The Duke</div>
+
+      <div class="section-label">Lobby</div>
+
+      <div class="t-name-row">
+        <label>Your name:</label>
+        <input class="t-name-input" value="Reese" readonly>
+      </div>
+
+      <div class="t-card">
+        <h2>Play Online</h2>
+        <button class="t-btn">Create Game</button>
+        <div class="t-join-row">
+          <input class="t-input" value="XKQR4W" readonly>
+          <button class="t-btn">Join</button>
+        </div>
+        <div class="t-error"></div>
+      </div>
+
+      <div class="t-divider">— or —</div>
+
+      <div class="t-card">
+        <h2>Play Locally</h2>
+        <button class="t-btn">Local Game</button>
+      </div>
+
+      <div class="section-label">After "Create Game"</div>
+
+      <div class="t-card">
+        <h2>Game Created</h2>
+        <p style="font-size:0.8rem;opacity:0.65;text-align:center">Share this code:</p>
+        <div class="t-code-box">
+          <div class="t-code-val">XKQR4W</div>
+          <button class="t-btn">Copy</button>
+        </div>
+        <div class="t-status joined">Opponent joined — ready to play!</div>
+        <button class="t-btn">Enter Game</button>
+        <button class="t-btn secondary">Cancel</button>
+      </div>
+
+      <div class="section-label">In-game</div>
+
+      <div class="t-status-bar">
+        <div class="player">White's turn</div>
+        <div class="msg">Select a tile to move, or draw from bag</div>
+      </div>
+
+      <div class="t-preview">
+        <div class="t-preview-tile">Pikeman</div>
+        <div>
+          <div class="t-preview-name">Pikeman</div>
+          <div class="t-preview-hint">Click a highlighted square to place it.</div>
+        </div>
+      </div>
+
+      <div style="width:100%;display:flex;gap:8px">
+        <button class="t-btn" style="flex:1">Draw from Bag</button>
+        <button class="t-btn secondary" style="flex:1">Cancel</button>
+      </div>
+
+      <div class="t-thinking">AI is thinking…</div>
+
+      <div class="section-label">Game over / waiting overlays</div>
+
+      <div class="t-panel">
+        <h2>White Wins!</h2>
+        <p>The Duke has been captured.<br>Well played.</p>
+        <div class="t-btn-row">
+          <button class="t-btn">New Game</button>
+          <button class="t-btn secondary">Lobby</button>
+        </div>
+      </div>
+
+      <div class="t-panel">
+        <h2>Waiting for Opponent</h2>
+        <p style="opacity:0.7;font-size:0.85rem">Share this code:</p>
+        <div class="t-code-val">XKQR4W</div>
+        <button class="t-btn" style="align-self:center;width:auto;padding:7px 18px">Copy Code</button>
+        <div class="t-status joined">Opponent joined — ready to play!</div>
+      </div>
+
+      <div class="section-label">Difficulty slider</div>
+      <div class="t-card">
+        <p style="font-size:0.85rem;opacity:0.75">Difficulty: <strong style="color:var(--accent)">4 — Medium</strong></p>
+        <input type="range" class="t-slider" min="1" max="8" value="4">
+        <button class="t-btn">Start Game</button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- .grid -->
+
+</body>
+</html>

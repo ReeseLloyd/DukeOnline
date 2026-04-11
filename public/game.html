@@ -12,8 +12,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #2a1f0e;
-      color: #e8d9c0;
+      background: #1a0f2e;
+      color: #ede0c8;
       font-family: Georgia, 'Times New Roman', serif;
       display: flex;
       flex-direction: column;
@@ -26,7 +26,7 @@
     h1 {
       font-size: 1.3rem;
       letter-spacing: 0.06em;
-      color: #d4b483;
+      color: #c8a020;
     }
 
     /* ── Status bar ─────────────────────────────────────────────────────────── */
@@ -54,7 +54,7 @@
 
     #board-wrap { position: relative; }
 
-    canvas { display: block; }
+    canvas { display: block; touch-action: manipulation; }
 
     /* ── Controls ───────────────────────────────────────────────────────────── */
 
@@ -66,9 +66,9 @@
     }
 
     button {
-      background: #5c3d1a;
-      color: #e8d9c0;
-      border: 1px solid #8a6030;
+      background: #3d1f6a;
+      color: #ede0c8;
+      border: 1px solid #7a50a0;
       border-radius: 4px;
       padding: 7px 16px;
       font-family: inherit;
@@ -77,7 +77,7 @@
       white-space: nowrap;
     }
 
-    button:hover:not(:disabled) { background: #7a5225; }
+    button:hover:not(:disabled) { background: #5a3090; }
     button:disabled { opacity: 0.38; cursor: default; }
 
     /* ── Game-over card ─────────────────────────────────────────────────────── */
@@ -97,8 +97,8 @@
     #gameover-overlay[hidden] { display: none; }
 
     .panel {
-      background: #3a2a10;
-      border: 2px solid #8a6030;
+      background: #271545;
+      border: 2px solid #7a50a0;
       border-radius: 8px;
       padding: 28px 32px;
       max-width: 380px;
@@ -111,7 +111,7 @@
       pointer-events: auto;
     }
 
-    .panel h2 { color: #d4b483; font-size: 1.3rem; }
+    .panel h2 { color: #c8a020; font-size: 1.3rem; }
     .panel p  { opacity: 0.8; line-height: 1.5; }
 
     .panel button { align-self: center; padding: 9px 24px; font-size: 0.95rem; }
@@ -122,7 +122,7 @@
       right: 10px;
       background: none;
       border: none;
-      color: #e8d9c0;
+      color: #ede0c8;
       font-size: 1.1rem;
       line-height: 1;
       padding: 4px 6px;
@@ -141,6 +141,22 @@
     }
     #postgame-controls[hidden] { display: none; }
 
+    /* ── Pending move (staged, awaiting confirm/undo) ───────────────────────── */
+
+    #pending-controls {
+      display: flex;
+      gap: 10px;
+      min-height: 38px;
+      align-items: center;
+    }
+    #pending-controls[hidden] { display: none; }
+
+    #confirm-btn {
+      background: #4a2880;
+      border-color: #9a60c0;
+    }
+    #confirm-btn:hover:not(:disabled) { background: #6a3aa0; }
+
     /* ── Thinking indicator ─────────────────────────────────────────────────── */
 
     #thinking {
@@ -157,7 +173,7 @@
       align-items: center;
       gap: 14px;
       background: rgba(255, 255, 255, 0.05);
-      border: 1px solid #8a6030;
+      border: 1px solid #7a50a0;
       border-radius: 6px;
       padding: 10px 16px;
     }
@@ -167,7 +183,7 @@
     #draw-tile-name {
       font-size: 1rem;
       font-weight: bold;
-      color: #d4b483;
+      color: #c8a020;
       margin-bottom: 4px;
     }
 
@@ -183,7 +199,7 @@
       align-items: center;
       gap: 14px;
       background: rgba(255, 255, 255, 0.05);
-      border: 1px solid #6a5030;
+      border: 1px solid #4a3080;
       border-radius: 6px;
       padding: 10px 16px;
     }
@@ -193,7 +209,7 @@
     #flip-tile-name {
       font-size: 0.9rem;
       font-weight: bold;
-      color: #c8b483;
+      color: #b89820;
       margin-bottom: 4px;
     }
 
@@ -204,7 +220,7 @@
 
     /* ── Mode / difficulty overlay ──────────────────────────────────────────── */
 
-    .overlay { position: fixed; inset: 0; background: rgba(15,9,2,0.82);
+    .overlay { position: fixed; inset: 0; background: rgba(10,5,22,0.85);
                display: flex; align-items: center; justify-content: center; z-index: 20; }
     .overlay[hidden] { display: none; }
 
@@ -219,12 +235,12 @@
     #waiting-code {
       font-size: 2.4rem;
       letter-spacing: 0.28em;
-      color: #d4b483;
+      color: #c8a020;
       font-family: 'Courier New', Courier, monospace;
       text-align: center;
       padding: 12px 16px;
-      background: rgba(0,0,0,0.22);
-      border: 1px solid #8a6030;
+      background: rgba(0,0,0,0.30);
+      border: 1px solid #7a50a0;
       border-radius: 6px;
     }
 
@@ -244,17 +260,27 @@
     #waiting-join-msg.joined {
       opacity: 1;
       font-style: normal;
-      color: #80c880;
+      color: #70c870;
     }
 
     #diff-slider {
       width: 100%;
-      accent-color: #8a6030;
+      accent-color: #7a50a0;
       cursor: pointer;
       margin: 4px 0 2px;
     }
 
-    #diff-label { color: #d4b483; font-weight: bold; }
+    #diff-label { color: #c8a020; font-weight: bold; }
+
+    /* ── Version string ──────────────────────────────────────────────────────── */
+
+    .version {
+      font-size: 0.68rem;
+      font-family: 'Courier New', Courier, monospace;
+      letter-spacing: 0.05em;
+      opacity: 0.28;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -273,6 +299,11 @@
 <div id="controls">
   <button id="draw-btn" disabled>Draw from Bag</button>
   <button id="cancel-btn" hidden>Cancel</button>
+</div>
+
+<div id="pending-controls" hidden>
+  <button id="undo-btn">Undo Move</button>
+  <button id="confirm-btn">Confirm Move</button>
 </div>
 
 <div id="postgame-controls" hidden>
@@ -395,6 +426,9 @@ let aiWorker   = null;
 let aiThinking = false;
 let animating  = false;       // true while a move animation is playing
 let animOverlay = null;       // { phase: 0|1, from: [c,r]|null, to: [c,r]|null }
+
+let _pendingMove     = null;  // staged move awaiting confirmation (or null)
+let _pendingPreState = null;  // board state snapshot before the staged move
 
 // ─── Online mode ──────────────────────────────────────────────────────────────
 // Populated from URL params when arriving from index.html.
@@ -830,9 +864,9 @@ function render() {
     }
   }
 
-  // Board border
-  ctx.strokeStyle = '#5c3d1a';
-  ctx.lineWidth   = 2;
+  // Board border — gold when a move is staged to signal "preview mode"
+  ctx.strokeStyle = _pendingMove ? '#c8a020' : '#5a3a80';
+  ctx.lineWidth   = _pendingMove ? 3 : 2;
   ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 }
 
@@ -857,6 +891,35 @@ function updateUI() {
 
   const p = state.currentPlayer;
 
+  // Pending: a piece/move has been staged, awaiting confirm/undo.
+  // Evaluated before the setup/active branch so it intercepts both phases.
+  // Use _pendingPreState.currentPlayer for the staging player — always correct,
+  // unlike (1 - state.currentPlayer) which fails when currentPlayer doesn't
+  // advance between consecutive setup steps for the same player.
+  if (_pendingMove !== null) {
+    const sp = _pendingPreState.currentPlayer;
+    if (_onlineMode) {
+      playerEl.textContent = _myName || 'You';
+    } else {
+      playerEl.textContent = `Player ${sp + 1} (${PLAYER_NAMES[sp]})`;
+    }
+    playerEl.style.color = sp === 0 ? '#ede0c8' : '#c8a477';
+
+    if (_pendingMove.action === 'draw') {
+      msgEl.textContent = 'Tile placed \u2014 confirm or choose a different square.';
+      document.getElementById('undo-btn').textContent = 'Change Placement';
+    } else if (_pendingMove.action === 'setup') {
+      msgEl.textContent = 'Piece placed \u2014 confirm or undo.';
+      document.getElementById('undo-btn').textContent = 'Undo Placement';
+    } else {
+      msgEl.textContent = 'Move staged \u2014 confirm or undo.';
+      document.getElementById('undo-btn').textContent = 'Undo Move';
+    }
+    document.getElementById('confirm-btn').textContent = 'Confirm';
+    drawBtn.disabled = true;
+    return;
+  }
+
   if (state.phase === 'setup') {
     const info = getSetupInfo(state);
     const p    = info.player;
@@ -867,7 +930,7 @@ function updateUI() {
     } else {
       playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]}) — Setup`;
     }
-    playerEl.style.color = p === 0 ? '#e8d9c0' : '#c8a477';
+    playerEl.style.color = p === 0 ? '#ede0c8' : '#c8a477';
     const firstLabel = `Player ${state.firstPlayer + 1} (${PLAYER_NAMES[state.firstPlayer]}) moves first.`;
     if (gameMode === 'ai' && p === 1) {
       msgEl.textContent = 'AI is placing its pieces\u2026';
@@ -977,6 +1040,7 @@ canvas.addEventListener('mousemove', function (evt) {
 function handleClick(col, row) {
   // ── Setup phase ─────────────────────────────────────────────────────────────
   if (state.phase === 'setup') {
+    if (_pendingMove !== null) return;  // staging: wait for confirm or undo
     const info = getSetupInfo(state);
     // Block if AI is handling this placement or it isn't our turn online.
     if (!info) return;
@@ -985,26 +1049,18 @@ function handleClick(col, row) {
 
     const isValid = info.targets.some(([tc, tr]) => tc === col && tr === row);
     if (isValid) {
+      _pendingPreState = state;
       state = applySetupPlacement(state, col, row);
-      if (_onlineMode) {
-        // Sync placement to Firestore; opponent's listener will update their state.
-        _syncToFirestore(null).catch(console.error);
-        if (state.phase === 'active') legalMoves = getLegalMoves(state);
-      } else {
-        if (state.phase === 'active') {
-          legalMoves = getLegalMoves(state);
-          triggerAI();
-        } else {
-          triggerAISetup();
-        }
-      }
+      _pendingMove = { action: 'setup' };
+      document.getElementById('pending-controls').hidden = false;
       render(); updateUI();
     }
     return;
   }
 
   if (state.phase !== 'active') return;
-  if (!_isMyTurn()) return;   // online: block input on opponent's turn
+  if (!_isMyTurn()) return;          // online: block input on opponent's turn
+  if (_pendingMove !== null) return; // staging: wait for confirm or undo
 
   // ── Draw placement mode ─────────────────────────────────────────────────────
   if (uiMode === 'draw') {
@@ -1098,17 +1154,104 @@ function commitMove(move) {
   const preState  = state;
   const postState = applyMove(preState, move);
   resetUI();
+
+  if (postState.phase === 'gameover') {
+    // Winning move — auto-commit immediately, no staging needed
+    playMoveAnimation(preState, postState, move, function () {
+      legalMoves = [];
+      render(); updateUI();
+      if (_onlineMode) _syncToFirestore(move).catch(console.error);
+      else triggerAI();
+    });
+    return;
+  }
+
+  // All other moves: animate the preview, then hold for player review
   playMoveAnimation(preState, postState, move, function () {
-    // state is already postState (set by playMoveAnimation)
-    legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
-    render();
-    updateUI();
-    if (_onlineMode) {
-      _syncToFirestore(move).catch(console.error);
-    } else {
-      triggerAI();
-    }
+    _pendingMove     = move;
+    _pendingPreState = preState;
+    legalMoves = [];   // block further moves until confirmed
+    document.getElementById('pending-controls').hidden = false;
+    render(); updateUI();
   });
+}
+
+// ─── Pending move: confirm and undo ──────────────────────────────────────────
+
+/**
+ * Commit the staged move: sync to Firestore / trigger AI, then clear pending.
+ * Called when the player clicks "Confirm Move".
+ */
+function submitTurn() {
+  const move       = _pendingMove;
+  _pendingMove     = null;
+  _pendingPreState = null;
+  document.getElementById('pending-controls').hidden = true;
+
+  if (move.action === 'setup') {
+    // Setup placement confirmed — sync and hand off to AI / next step.
+    if (_onlineMode) {
+      _syncToFirestore(null).catch(console.error);
+      if (state.phase === 'active') legalMoves = getLegalMoves(state);
+    } else {
+      if (state.phase === 'active') {
+        legalMoves = getLegalMoves(state);
+        triggerAI();
+      } else {
+        triggerAISetup();
+      }
+    }
+    render(); updateUI();
+    return;
+  }
+
+  // Active-phase move confirmed.
+  legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+  render(); updateUI();
+  if (_onlineMode) _syncToFirestore(move).catch(console.error);
+  else triggerAI();
+}
+
+/**
+ * Revert the staged move. Called when the player clicks "Undo Move" /
+ * "Change Placement".
+ *
+ * For draw placements: the tile has already been pulled from the bag (that
+ * part is irreversible), so we restore to the pre-placement state and
+ * immediately re-enter draw mode — the player must pick a different square.
+ *
+ * For all other moves: restore to the pre-move state and return to idle so
+ * the player can choose a different action.
+ */
+function undoMove() {
+  const wasDrawPlacement = _pendingMove && _pendingMove.action === 'draw';
+  state            = _pendingPreState;
+  _pendingMove     = null;
+  _pendingPreState = null;
+  document.getElementById('pending-controls').hidden = true;
+
+  if (wasDrawPlacement) {
+    // Tile is still committed from the bag — force re-placement elsewhere.
+    // peekBag() returns the same tile since we restored the pre-placement state.
+    legalMoves = getLegalMoves(state);
+    enterMode('draw');
+    const p    = state.currentPlayer;
+    const next = peekBag(state, p);
+    if (next) {
+      const pc  = document.getElementById('draw-tile-canvas');
+      const sz  = 90;
+      pc.width  = sz;
+      pc.height = sz;
+      drawTile(pc.getContext('2d'), 0, 0, sz, next, 0, p);
+      document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[next] ?? next;
+      document.getElementById('draw-preview').hidden = false;
+    }
+  } else {
+    legalMoves = getLegalMoves(state);
+    resetUI();
+  }
+
+  render(); updateUI();
 }
 
 // ─── Button handlers ──────────────────────────────────────────────────────────
@@ -1138,9 +1281,23 @@ document.getElementById('cancel-btn').addEventListener('click', function () {
   render(); updateUI();
 });
 
+document.getElementById('undo-btn').addEventListener('click', undoMove);
+document.getElementById('confirm-btn').addEventListener('click', submitTurn);
+
+// Double-click / double-tap on the board auto-confirms a staged move.
+// The first click of the pair stages the move (or is blocked if already pending);
+// the second click is swallowed by the _pendingMove guard in handleClick();
+// then dblclick fires here and commits.
+canvas.addEventListener('dblclick', function () {
+  if (_pendingMove !== null) submitTurn();
+});
+
 function _resetForNewGame() {
   document.getElementById('gameover-overlay').hidden  = true;
   document.getElementById('postgame-controls').hidden = true;
+  document.getElementById('pending-controls').hidden  = true;
+  _pendingMove     = null;
+  _pendingPreState = null;
   if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
   aiThinking = false;
   document.getElementById('thinking').textContent = '';
@@ -1221,5 +1378,7 @@ if (_onlineMode) {
 }
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
+
+<div class="version">2026.04.11.01</div>
 </body>
 </html>
