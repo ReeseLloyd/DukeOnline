@@ -135,14 +135,52 @@ async function joinOnlineGame(code) {
  * callback(data) fires immediately with the current doc and on every change.
  * @returns {function} unsubscribe — call to stop listening.
  */
+// ─── State serialisation ──────────────────────────────────────────────────────
+//
+// Firestore does not support nested arrays.  GameState has two:
+//   board  — Array[6][6]         → stored as a flat 36-element array
+//   bags   — [string[], string[]] → stored as { p0: [...], p1: [...] }
+
+function _serializeState(state) {
+  return {
+    ...state,
+    board: state.board.flat(),                      // 2-D → 1-D (36 cells)
+    bags:  { p0: state.bags[0], p1: state.bags[1] }, // array-of-arrays → object
+  };
+}
+
+function _deserializeState(data) {
+  const flat = data.board;
+  return {
+    ...data,
+    board: Array.from({ length: 6 }, (_, r) => flat.slice(r * 6, r * 6 + 6)),
+    bags:  [data.bags.p0, data.bags.p1],
+  };
+}
+
+// ─── Realtime listener ────────────────────────────────────────────────────────
+
+/**
+ * Subscribe to realtime updates for a game.
+ * Deserialises state before handing data to the callback.
+ * callback(data) fires immediately with the current doc and on every change.
+ * @returns {function} unsubscribe — call to stop listening.
+ */
 function listenToGame(code, callback) {
   if (!_db) throw new Error('initFirebase() not called');
-  return _gamesRef().doc(code)
-    .onSnapshot(snap => { if (snap.exists) callback(snap.data()); });
+  return _gamesRef().doc(code).onSnapshot(snap => {
+    if (!snap.exists) return;
+    const data = snap.data();
+    if (data.state) data.state = _deserializeState(data.state);
+    callback(data);
+  });
 }
+
+// ─── Write ────────────────────────────────────────────────────────────────────
 
 /**
  * Write the current game state to Firestore after a move or setup placement.
+ * Serialises nested arrays before writing.
  * @param {string}      code   Game code
  * @param {object}      state  Current GameState (post-move)
  * @param {object|null} move   The move that produced this state, or null for
@@ -151,7 +189,7 @@ function listenToGame(code, callback) {
 async function writeGameState(code, state, move) {
   if (!_db) throw new Error('initFirebase() not called');
   await _gamesRef().doc(code).update({
-    state,
+    state:     _serializeState(state),
     lastMove:  move ?? null,
     status:    state.phase === 'gameover' ? 'gameover' : 'active',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
