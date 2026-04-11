@@ -146,6 +146,33 @@
       color: #80c880;
     }
 
+    /* ── Player name ─────────────────────────────────────────────────────────── */
+
+    .name-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.88rem;
+      opacity: 0.70;
+    }
+
+    .name-row:focus-within { opacity: 1; }
+
+    .name-row label { white-space: nowrap; }
+
+    .name-row input {
+      background: #2a1f0e;
+      color: #e8d9c0;
+      border: 1px solid #4a3a1e;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      width: 160px;
+    }
+
+    .name-row input:focus { outline: 1px solid #8a6030; }
+
     /* ── Divider ─────────────────────────────────────────────────────────────── */
 
     .or-divider {
@@ -164,6 +191,12 @@
 <body>
 
 <h1>The Duke</h1>
+
+<div class="name-row">
+  <label for="player-name">Your name:</label>
+  <input type="text" id="player-name" placeholder="Anonymous" maxlength="20"
+         autocomplete="off" spellcheck="false">
+</div>
 
 <!-- Online: default view -->
 <div class="card" id="online-card">
@@ -192,11 +225,8 @@
 <div class="or-divider">— or —</div>
 
 <div class="card">
-  <h2>Play Offline</h2>
-  <div class="btn-row">
-    <button id="ai-btn">vs. AI</button>
-    <button id="hotseat-btn">1v1 Hotseat</button>
-  </div>
+  <h2>Play Locally</h2>
+  <button id="local-btn">Local Game</button>
 </div>
 
 <!-- Firebase compat SDK -->
@@ -226,6 +256,18 @@
   link.href = fc.toDataURL('image/png');
   document.head.appendChild(link);
 }());
+
+// ─── Player name (localStorage) ──────────────────────────────────────────────
+
+const _nameInput = document.getElementById('player-name');
+_nameInput.value = localStorage.getItem('duke_player_name') || '';
+_nameInput.addEventListener('input', function () {
+  localStorage.setItem('duke_player_name', this.value.trim());
+});
+
+function _playerName() {
+  return localStorage.getItem('duke_player_name') || '';
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -267,7 +309,7 @@ document.getElementById('create-btn').addEventListener('click', async function (
     // The authoritative value comes from createGame({ seed }) on game.html.
     _createFP = Math.round(Math.random());  // 0 or 1
 
-    const { code } = await createOnlineGame(_createSeed, _createFP);
+    const { code } = await createOnlineGame(_createSeed, _createFP, _playerName());
     _createCode = code;
 
     // Switch to "code sharing" panel
@@ -359,7 +401,7 @@ async function handleJoin() {
 
   try {
     await initFirebase();
-    const result = await joinOnlineGame(raw);
+    const result = await joinOnlineGame(raw, _playerName());
 
     if (!result) {
       showError('Game not found or already full.');
@@ -377,13 +419,9 @@ async function handleJoin() {
   }
 }
 
-// ─── Offline modes ────────────────────────────────────────────────────────────
+// ─── Local game ───────────────────────────────────────────────────────────────
 
-document.getElementById('ai-btn').addEventListener('click', function () {
-  window.location.href = 'game.html';
-});
-
-document.getElementById('hotseat-btn').addEventListener('click', function () {
+document.getElementById('local-btn').addEventListener('click', function () {
   window.location.href = 'game.html';
 });
 

@@ -276,7 +276,6 @@
 </div>
 
 <div id="postgame-controls" hidden>
-  <button id="new-game-btn-post">New Game</button>
   <button id="lobby-btn-post">Return to Lobby</button>
 </div>
 
@@ -410,6 +409,8 @@ const _myPlayerIndex    = _onlineMode ? parseInt(_onlinePlayerStr) : null;
 
 let _ignoreNextSnapshot = false;  // skip the echo of our own Firestore write
 let _onlineUnsub        = null;   // Firestore listener unsubscribe fn
+let _myName             = '';     // from localStorage; shown in status bar
+let _opponentName       = '';     // from Firestore once opponent joins
 
 // ─── Clipboard helper ─────────────────────────────────────────────────────────
 // execCommand works without page focus; Clipboard API used as fallback only.
@@ -459,6 +460,10 @@ async function _syncToFirestore(move) {
  */
 function _onGameSnapshot(data) {
   if (_ignoreNextSnapshot) { _ignoreNextSnapshot = false; return; }
+
+  // Pick up opponent's name whenever the doc contains it.
+  const oppField = _myPlayerIndex === 0 ? 'player1name' : 'player0name';
+  if (data[oppField]) _opponentName = data[oppField];
 
   // Still waiting for player 1 to join — nothing to render yet.
   if (data.status === 'waiting') return;
@@ -512,6 +517,9 @@ async function _initOnlineGame() {
       'Could not connect to server. Please refresh.';
     return;
   }
+
+  // Load own name from localStorage (set on the lobby page).
+  _myName = localStorage.getItem('duke_player_name') || '';
 
   // Both players reconstruct identical state from the shared seed.
   state      = createGame({ seed: _onlineSeed });
@@ -852,7 +860,13 @@ function updateUI() {
   if (state.phase === 'setup') {
     const info = getSetupInfo(state);
     const p    = info.player;
-    playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]}) — Setup`;
+    if (_onlineMode) {
+      const name = (p === _myPlayerIndex)
+        ? (_myName || 'You') : (_opponentName || 'Opponent');
+      playerEl.textContent = `${name} \u2014 Setup`;
+    } else {
+      playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]}) — Setup`;
+    }
     playerEl.style.color = p === 0 ? '#e8d9c0' : '#c8a477';
     const firstLabel = `Player ${state.firstPlayer + 1} (${PLAYER_NAMES[state.firstPlayer]}) moves first.`;
     if (gameMode === 'ai' && p === 1) {
@@ -874,9 +888,10 @@ function updateUI() {
   const inGuard    = isDukeInGuard(state);
 
   if (_onlineMode) {
-    playerEl.textContent = isOppTurn
-      ? `Opponent's turn${inGuard ? ' — Guard' : ''}`
-      : `Your turn${inGuard ? ' — Guard' : ''}`;
+    const myLabel  = _myName       || 'You';
+    const oppLabel = _opponentName || 'Opponent';
+    playerEl.textContent = (isOppTurn ? oppLabel : myLabel)
+      + (inGuard ? ' \u2014 Guard' : '');
   } else {
     playerEl.textContent =
       `Player ${p + 1} (${PLAYER_NAMES[p]})${isAiTurn ? ' — AI' : ''}${inGuard ? ' — Guard' : ''}`;
@@ -1141,8 +1156,7 @@ document.getElementById('gameover-close').addEventListener('click', function () 
   document.getElementById('gameover-overlay').hidden = true;
 });
 
-document.getElementById('new-game-btn').addEventListener('click',      _resetForNewGame);
-document.getElementById('new-game-btn-post').addEventListener('click', _resetForNewGame);
+document.getElementById('new-game-btn').addEventListener('click', _resetForNewGame);
 document.getElementById('lobby-btn-post').addEventListener('click', function () {
   if (_onlineUnsub) _onlineUnsub();
   window.location.href = 'index.html';

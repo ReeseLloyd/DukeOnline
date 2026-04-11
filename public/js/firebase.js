@@ -79,7 +79,7 @@ function _gamesRef() { return _db.collection('games'); }
  * @param {number} firstPlayer   0 or 1 (from state.firstPlayer after createGame())
  * @returns {Promise<{ code: string }>}
  */
-async function createOnlineGame(seed, firstPlayer) {
+async function createOnlineGame(seed, firstPlayer, playerName) {
   if (!_db) throw new Error('initFirebase() not called');
 
   let code, ref, snap;
@@ -90,15 +90,17 @@ async function createOnlineGame(seed, firstPlayer) {
   } while (snap.exists);
 
   await ref.set({
-    status:     'waiting',
-    player0uid: _uid,
-    player1uid: null,
+    status:      'waiting',
+    player0uid:  _uid,
+    player0name: playerName || '',
+    player1uid:  null,
+    player1name: '',
     seed,
     firstPlayer,
-    state:      null,
-    lastMove:   null,
-    createdAt:  firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
+    state:       null,
+    lastMove:    null,
+    createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
   });
 
   return { code };
@@ -110,7 +112,7 @@ async function createOnlineGame(seed, firstPlayer) {
  * @returns {Promise<{ seed: number, firstPlayer: number }|null>}
  *          null if the game is not found, already full, or not waiting.
  */
-async function joinOnlineGame(code) {
+async function joinOnlineGame(code, playerName) {
   if (!_db) throw new Error('initFirebase() not called');
 
   const ref  = _gamesRef().doc(code.toUpperCase().trim());
@@ -122,9 +124,10 @@ async function joinOnlineGame(code) {
   if (d.player1uid !== null)     return null;
 
   await ref.update({
-    player1uid: _uid,
-    status:     'active',
-    updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
+    player1uid:  _uid,
+    player1name: playerName || '',
+    status:      'active',
+    updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
   });
 
   return { seed: d.seed, firstPlayer: d.firstPlayer };
