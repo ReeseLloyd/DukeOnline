@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Duke</title>
+  <!-- Firebase compat SDK (loaded here so it's available in the inline script) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -210,6 +214,39 @@
     #difficulty-section[hidden] { display: none; }
     #difficulty-section p { opacity: 0.75; font-size: 0.9rem; }
 
+    /* ── Waiting overlay (online: player 0 waiting for opponent) ───────────── */
+
+    #waiting-code {
+      font-size: 2.4rem;
+      letter-spacing: 0.28em;
+      color: #d4b483;
+      font-family: 'Courier New', Courier, monospace;
+      text-align: center;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.22);
+      border: 1px solid #8a6030;
+      border-radius: 6px;
+    }
+
+    #waiting-copy-btn {
+      align-self: center;
+      padding: 7px 20px;
+      font-size: 0.85rem;
+    }
+
+    #waiting-join-msg {
+      font-size: 0.88rem;
+      opacity: 0.7;
+      text-align: center;
+      font-style: italic;
+    }
+
+    #waiting-join-msg.joined {
+      opacity: 1;
+      font-style: normal;
+      color: #80c880;
+    }
+
     #diff-slider {
       width: 100%;
       accent-color: #8a6030;
@@ -277,6 +314,17 @@
   </div>
 </div>
 
+<!-- Online: waiting for opponent to join (shown only for the game creator) -->
+<div id="waiting-overlay" class="overlay" hidden>
+  <div class="panel">
+    <h2>Waiting for Opponent</h2>
+    <p style="opacity:0.75;font-size:0.9rem">Share this code:</p>
+    <div id="waiting-code"></div>
+    <button id="waiting-copy-btn">Copy Code</button>
+    <div id="waiting-join-msg">Waiting for your opponent to join&hellip;</div>
+  </div>
+</div>
+
 <div id="gameover-overlay" hidden>
   <div class="panel">
     <button id="gameover-close" title="Dismiss">&#x2715;</button>
@@ -290,6 +338,7 @@
 <script src="js/tileRenderer.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ai.js"></script>
+<script src="js/firebase.js"></script>
 <script>
 'use strict';
 
@@ -346,6 +395,129 @@ let aiWorker   = null;
 let aiThinking = false;
 let animating  = false;       // true while a move animation is playing
 let animOverlay = null;       // { phase: 0|1, from: [c,r]|null, to: [c,r]|null }
+
+// ─── Online mode ──────────────────────────────────────────────────────────────
+// Populated from URL params when arriving from index.html.
+// _onlineMode=false means hotseat/AI — all the old code paths remain unchanged.
+
+const _urlParams        = new URLSearchParams(window.location.search);
+const _onlineCode       = _urlParams.get('code');
+const _onlineSeed       = parseInt(_urlParams.get('seed')) || null;
+const _onlinePlayerStr  = _urlParams.get('player');
+const _onlineMode       = !!(_onlineCode && _onlineSeed && _onlinePlayerStr !== null);
+const _myPlayerIndex    = _onlineMode ? parseInt(_onlinePlayerStr) : null;
+
+let _ignoreNextSnapshot = false;  // skip the echo of our own Firestore write
+let _onlineUnsub        = null;   // Firestore listener unsubscribe fn
+
+// ─── Online helpers ───────────────────────────────────────────────────────────
+
+/** True when it is this client's turn to act. Always true in offline modes. */
+function _isMyTurn() {
+  return !_onlineMode || state.currentPlayer === _myPlayerIndex;
+}
+
+/**
+ * Write the current state to Firestore after a move or setup placement.
+ * Sets _ignoreNextSnapshot so our own write doesn't trigger a redundant update.
+ * @param {object|null} move  The move (active phase) or null (setup placement).
+ */
+async function _syncToFirestore(move) {
+  _ignoreNextSnapshot = true;
+  try {
+    await writeGameState(_onlineCode, state, move ?? null);
+  } catch (e) {
+    console.error('Firestore write failed:', e);
+    _ignoreNextSnapshot = false;
+  }
+}
+
+/**
+ * Firestore snapshot handler — called whenever the game doc changes.
+ * Ignores our own writes; animates opponent moves; snaps setup placements.
+ */
+function _onGameSnapshot(data) {
+  if (_ignoreNextSnapshot) { _ignoreNextSnapshot = false; return; }
+
+  // Still waiting for player 1 to join — nothing to render yet.
+  if (data.status === 'waiting') return;
+
+  // Player 1 just joined (player 0's waiting overlay is visible).
+  const waitingEl = document.getElementById('waiting-overlay');
+  if (!waitingEl.hidden) {
+    waitingEl.hidden = true;
+    const msg = document.getElementById('waiting-join-msg');
+    msg.textContent = 'Opponent joined!';
+    msg.classList.add('joined');
+
+    // If no state written yet (no placements), use local state and re-render.
+    if (!data.state) { render(); updateUI(); return; }
+  }
+
+  // No state written yet — both clients use their local createGame({ seed }) state.
+  if (!data.state) return;
+
+  const newState = data.state;
+  const lastMove = data.lastMove;  // null for setup placements
+
+  if (lastMove) {
+    // Opponent made an active move — animate it.
+    const preState = state;
+    playMoveAnimation(preState, newState, lastMove, function () {
+      state      = newState;
+      legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+      render();
+      updateUI();
+    });
+  } else {
+    // Setup placement — instant snap.
+    state      = newState;
+    legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+    render();
+    updateUI();
+  }
+}
+
+/**
+ * Initialise online mode: sign in anonymously, build local state, start listener.
+ * Called at boot when URL params indicate an online game.
+ */
+async function _initOnlineGame() {
+  try {
+    await initFirebase();
+  } catch (e) {
+    console.error('Firebase init failed:', e);
+    document.getElementById('status-msg').textContent =
+      'Could not connect to server. Please refresh.';
+    return;
+  }
+
+  // Both players reconstruct identical state from the shared seed.
+  state      = createGame({ seed: _onlineSeed });
+  legalMoves = [];
+
+  if (_myPlayerIndex === 0) {
+    // Show waiting overlay with the game code.
+    document.getElementById('waiting-code').textContent = _onlineCode;
+    document.getElementById('waiting-overlay').hidden   = false;
+    document.getElementById('mode-overlay').hidden      = true;
+
+    document.getElementById('waiting-copy-btn').addEventListener('click', function () {
+      navigator.clipboard.writeText(_onlineCode).then(() => {
+        this.textContent = 'Copied!';
+        setTimeout(() => { this.textContent = 'Copy Code'; }, 1800);
+      }).catch(() => {});
+    });
+  } else {
+    // Player 1: game is already active, start immediately.
+    document.getElementById('mode-overlay').hidden = true;
+    render();
+    updateUI();
+  }
+
+  // Subscribe to game updates.
+  _onlineUnsub = listenToGame(_onlineCode, _onGameSnapshot);
+}
 
 function _applyAIMove(move) {
   aiThinking = false;
@@ -667,6 +839,8 @@ function updateUI() {
     const firstLabel = `Player ${state.firstPlayer + 1} (${PLAYER_NAMES[state.firstPlayer]}) moves first.`;
     if (gameMode === 'ai' && p === 1) {
       msgEl.textContent = 'AI is placing its pieces\u2026';
+    } else if (_onlineMode && p !== _myPlayerIndex) {
+      msgEl.textContent = 'Opponent is placing their pieces\u2026';
     } else {
       msgEl.textContent = info.subStep === 0
         ? `Click a highlighted column to place your Duke. ${firstLabel}`
@@ -677,14 +851,29 @@ function updateUI() {
   }
 
   // Active phase
-  const isAiTurn = gameMode === 'ai' && p === 1;
-  const inGuard  = isDukeInGuard(state);
-  playerEl.textContent = `Player ${p + 1} (${PLAYER_NAMES[p]})${isAiTurn ? ' — AI' : ''}${inGuard ? ' — Guard' : ''}`;
+  const isAiTurn   = gameMode === 'ai' && p === 1;
+  const isOppTurn  = _onlineMode && !_isMyTurn();
+  const inGuard    = isDukeInGuard(state);
+
+  if (_onlineMode) {
+    playerEl.textContent = isOppTurn
+      ? `Opponent's turn${inGuard ? ' — Guard' : ''}`
+      : `Your turn${inGuard ? ' — Guard' : ''}`;
+  } else {
+    playerEl.textContent =
+      `Player ${p + 1} (${PLAYER_NAMES[p]})${isAiTurn ? ' — AI' : ''}${inGuard ? ' — Guard' : ''}`;
+  }
   playerEl.style.color = p === 0 ? '#e8d9c0' : '#c8a477';
 
   if (aiThinking) {
-    msgEl.textContent    = '';
-    drawBtn.disabled     = true;
+    msgEl.textContent = '';
+    drawBtn.disabled  = true;
+    return;
+  }
+
+  if (isOppTurn) {
+    msgEl.textContent = 'Waiting for opponent\u2026';
+    drawBtn.disabled  = true;
     return;
   }
 
@@ -756,15 +945,25 @@ function handleClick(col, row) {
   // ── Setup phase ─────────────────────────────────────────────────────────────
   if (state.phase === 'setup') {
     const info = getSetupInfo(state);
-    if (!info || (gameMode === 'ai' && info.player === 1)) return;  // AI handles its own setup
+    // Block if AI is handling this placement or it isn't our turn online.
+    if (!info) return;
+    if (gameMode === 'ai' && info.player === 1) return;
+    if (_onlineMode && !_isMyTurn()) return;
+
     const isValid = info.targets.some(([tc, tr]) => tc === col && tr === row);
     if (isValid) {
       state = applySetupPlacement(state, col, row);
-      if (state.phase === 'active') {
-        legalMoves = getLegalMoves(state);
-        triggerAI();
+      if (_onlineMode) {
+        // Sync placement to Firestore; opponent's listener will update their state.
+        _syncToFirestore(null).catch(console.error);
+        if (state.phase === 'active') legalMoves = getLegalMoves(state);
       } else {
-        triggerAISetup();   // fires if it's now the AI's turn to place
+        if (state.phase === 'active') {
+          legalMoves = getLegalMoves(state);
+          triggerAI();
+        } else {
+          triggerAISetup();
+        }
       }
       render(); updateUI();
     }
@@ -772,6 +971,7 @@ function handleClick(col, row) {
   }
 
   if (state.phase !== 'active') return;
+  if (!_isMyTurn()) return;   // online: block input on opponent's turn
 
   // ── Draw placement mode ─────────────────────────────────────────────────────
   if (uiMode === 'draw') {
@@ -870,7 +1070,11 @@ function commitMove(move) {
     legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
     render();
     updateUI();
-    triggerAI();
+    if (_onlineMode) {
+      _syncToFirestore(move).catch(console.error);
+    } else {
+      triggerAI();
+    }
   });
 }
 
@@ -972,7 +1176,14 @@ function startNewGame(mode, depth) {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 resizeCanvas();   // sizes canvas and calls render()
-// Mode overlay is visible by default (no hidden attr) — wait for player to choose
+
+if (_onlineMode) {
+  // Arriving from index.html with ?code=X&player=Y&seed=N.
+  // Hide the mode overlay immediately; _initOnlineGame handles everything.
+  document.getElementById('mode-overlay').hidden = true;
+  _initOnlineGame().catch(console.error);
+}
+// Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 </body>
 </html>

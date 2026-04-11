@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Duke</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #2a1f0e;
+      color: #e8d9c0;
+      font-family: Georgia, 'Times New Roman', serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100svh;
+      padding: 24px 16px 32px;
+      gap: 20px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      letter-spacing: 0.08em;
+      color: #d4b483;
+    }
+
+    /* ── Panels ──────────────────────────────────────────────────────────────── */
+
+    .card {
+      background: #3a2a10;
+      border: 1px solid #6a4e22;
+      border-radius: 8px;
+      padding: 24px 28px;
+      width: min(360px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card h2 {
+      font-size: 1.05rem;
+      letter-spacing: 0.04em;
+      color: #d4b483;
+      border-bottom: 1px solid #5a3e1a;
+      padding-bottom: 10px;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+    button {
+      background: #5c3d1a;
+      color: #e8d9c0;
+      border: 1px solid #8a6030;
+      border-radius: 4px;
+      padding: 9px 18px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+      width: 100%;
+    }
+
+    button:hover:not(:disabled) { background: #7a5225; }
+    button:disabled { opacity: 0.38; cursor: default; }
+
+    /* ── Join row ────────────────────────────────────────────────────────────── */
+
+    .join-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .join-row input {
+      flex: 1;
+      background: #2a1f0e;
+      color: #e8d9c0;
+      border: 1px solid #6a4e22;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 1rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .join-row input::placeholder { color: #7a6040; letter-spacing: 0.05em; font-size: 0.85rem; }
+    .join-row input:focus { outline: 1px solid #8a6030; }
+
+    .join-row button { width: auto; padding: 8px 16px; }
+
+    /* ── Error / status text ─────────────────────────────────────────────────── */
+
+    .error-msg {
+      font-size: 0.82rem;
+      color: #d46060;
+      min-height: 1.1em;
+    }
+
+    .info-msg {
+      font-size: 0.82rem;
+      opacity: 0.68;
+      text-align: center;
+    }
+
+    /* ── Code display ────────────────────────────────────────────────────────── */
+
+    #code-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #code-value {
+      flex: 1;
+      font-size: 2rem;
+      letter-spacing: 0.3em;
+      color: #d4b483;
+      font-family: 'Courier New', Courier, monospace;
+      text-align: center;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid #8a6030;
+      border-radius: 6px;
+    }
+
+    #copy-btn {
+      width: auto;
+      padding: 8px 14px;
+      font-size: 0.82rem;
+    }
+
+    /* ── Waiting status ──────────────────────────────────────────────────────── */
+
+    #waiting-status {
+      font-size: 0.88rem;
+      text-align: center;
+      opacity: 0.72;
+      font-style: italic;
+      min-height: 1.2em;
+    }
+
+    #waiting-status.joined {
+      opacity: 1;
+      font-style: normal;
+      color: #80c880;
+    }
+
+    /* ── Divider ─────────────────────────────────────────────────────────────── */
+
+    .or-divider {
+      font-size: 0.78rem;
+      opacity: 0.4;
+      letter-spacing: 0.1em;
+      text-align: center;
+    }
+
+    /* ── Offline row ─────────────────────────────────────────────────────────── */
+
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row button { flex: 1; }
+  </style>
+</head>
+<body>
+
+<h1>The Duke</h1>
+
+<!-- Online: default view -->
+<div class="card" id="online-card">
+  <h2>Play Online</h2>
+  <button id="create-btn">Create Game</button>
+  <div class="join-row">
+    <input type="text" id="join-input" placeholder="Enter code" maxlength="6" autocomplete="off" spellcheck="false">
+    <button id="join-btn">Join</button>
+  </div>
+  <div class="error-msg" id="join-error"></div>
+</div>
+
+<!-- Online: after Create Game -->
+<div class="card" id="create-card" hidden>
+  <h2>Game Created</h2>
+  <p class="info-msg">Share this code with your opponent:</p>
+  <div id="code-box">
+    <div id="code-value">------</div>
+    <button id="copy-btn" title="Copy code">Copy</button>
+  </div>
+  <div id="waiting-status">Waiting for opponent to join&hellip;</div>
+  <button id="enter-btn">Enter Game</button>
+  <button id="cancel-btn">Cancel</button>
+</div>
+
+<div class="or-divider">— or —</div>
+
+<div class="card">
+  <h2>Play Offline</h2>
+  <div class="btn-row">
+    <button id="ai-btn">vs. AI</button>
+    <button id="hotseat-btn">1v1 Hotseat</button>
+  </div>
+</div>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+<!-- Tile renderer for favicon -->
+<script src="js/tiles.js"></script>
+<script src="js/tileRenderer.js"></script>
+
+<script src="js/firebase.js"></script>
+
+<script>
+'use strict';
+
+// ─── Favicon (same as game.html) ──────────────────────────────────────────────
+
+(function () {
+  const sz = 128;
+  const fc = document.createElement('canvas');
+  fc.width = sz; fc.height = sz;
+  drawTile(fc.getContext('2d'), 0, 0, sz, 'duke', 0, 0);
+  const link = document.createElement('link');
+  link.rel  = 'icon';
+  link.type = 'image/png';
+  link.href = fc.toDataURL('image/png');
+  document.head.appendChild(link);
+}());
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let _createCode   = null;   // code for the game we just created
+let _createSeed   = null;   // seed passed to game.html via URL
+let _createFP     = null;   // firstPlayer for the created game
+let _createUnsub  = null;   // Firestore listener for created game
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function showError(msg) {
+  document.getElementById('join-error').textContent = msg;
+}
+
+function clearError() {
+  document.getElementById('join-error').textContent = '';
+}
+
+// ─── Create flow ──────────────────────────────────────────────────────────────
+
+document.getElementById('create-btn').addEventListener('click', async function () {
+  this.disabled = true;
+  clearError();
+  try {
+    await initFirebase();
+
+    // Generate a seed; derive firstPlayer using the same PRNG as game.js.
+    // We run _mulberry32 for enough steps to match createGame()'s bag shuffles
+    // then read firstPlayer — but it's simpler to just use Math.random() here
+    // since both clients will reconstruct identical state from the seed via createGame().
+    _createSeed = Date.now() ^ (Math.random() * 0xFFFFFFFF | 0);
+
+    // Determine firstPlayer: replicate the logic in createGame().
+    // createGame shuffles bag0 and bag1 (each N draws), then does Math.floor(rng()*2).
+    // Rather than replicating the shuffle, we compute it properly using game.js
+    // which is NOT loaded on index.html.  Instead we just compute a random firstPlayer
+    // here and pass it; game.html will re-derive it from seed (identical result).
+    // We only need firstPlayer in the Firestore doc for informational purposes.
+    // The authoritative value comes from createGame({ seed }) on game.html.
+    _createFP = Math.round(Math.random());  // 0 or 1
+
+    const { code } = await createOnlineGame(_createSeed, _createFP);
+    _createCode = code;
+
+    // Switch to "code sharing" panel
+    document.getElementById('online-card').hidden  = true;
+    document.getElementById('create-card').hidden  = false;
+    document.getElementById('code-value').textContent = code;
+
+    // Listen for player 1 joining
+    _createUnsub = listenToGame(code, function (data) {
+      if (data.status === 'active') {
+        const ws = document.getElementById('waiting-status');
+        ws.textContent = 'Opponent joined \u2014 ready to play!';
+        ws.classList.add('joined');
+      }
+    });
+
+  } catch (e) {
+    console.error(e);
+    showError('Could not create game. Check your connection and try again.');
+    this.disabled = false;
+  }
+});
+
+// ─── Copy code ────────────────────────────────────────────────────────────────
+
+document.getElementById('copy-btn').addEventListener('click', function () {
+  if (!_createCode) return;
+  navigator.clipboard.writeText(_createCode).then(() => {
+    this.textContent = 'Copied!';
+    setTimeout(() => { this.textContent = 'Copy'; }, 1800);
+  }).catch(() => {
+    // Fallback: select the text for manual copy
+    const el = document.getElementById('code-value');
+    const range = document.createRange();
+    range.selectNode(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+  });
+});
+
+// ─── Enter game (player 0) ────────────────────────────────────────────────────
+
+document.getElementById('enter-btn').addEventListener('click', function () {
+  if (!_createCode) return;
+  if (_createUnsub) _createUnsub();
+  window.location.href =
+    `game.html?code=${_createCode}&player=0&seed=${_createSeed}`;
+});
+
+// ─── Cancel create ────────────────────────────────────────────────────────────
+
+document.getElementById('cancel-btn').addEventListener('click', function () {
+  if (_createUnsub) { _createUnsub(); _createUnsub = null; }
+  _createCode = null;
+  document.getElementById('create-card').hidden  = true;
+  document.getElementById('online-card').hidden  = false;
+  document.getElementById('create-btn').disabled = false;
+  document.getElementById('waiting-status').textContent =
+    'Waiting for opponent to join\u2026';
+  document.getElementById('waiting-status').classList.remove('joined');
+});
+
+// ─── Join flow ────────────────────────────────────────────────────────────────
+
+document.getElementById('join-btn').addEventListener('click', handleJoin);
+document.getElementById('join-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') handleJoin();
+});
+
+async function handleJoin() {
+  const raw  = document.getElementById('join-input').value.trim().toUpperCase();
+  clearError();
+
+  if (raw.length === 0) { showError('Enter a game code.'); return; }
+  if (raw.length !== 6) { showError('Codes are 6 letters.'); return; }
+
+  const joinBtn = document.getElementById('join-btn');
+  joinBtn.disabled = true;
+
+  try {
+    await initFirebase();
+    const result = await joinOnlineGame(raw);
+
+    if (!result) {
+      showError('Game not found or already full.');
+      joinBtn.disabled = false;
+      return;
+    }
+
+    window.location.href =
+      `game.html?code=${raw}&player=1&seed=${result.seed}`;
+
+  } catch (e) {
+    console.error(e);
+    showError('Connection error. Please try again.');
+    joinBtn.disabled = false;
+  }
+}
+
+// ─── Offline modes ────────────────────────────────────────────────────────────
+
+document.getElementById('ai-btn').addEventListener('click', function () {
+  window.location.href = 'game.html';
+});
+
+document.getElementById('hotseat-btn').addEventListener('click', function () {
+  window.location.href = 'game.html';
+});
+
+</script>
+</body>
+</html>
