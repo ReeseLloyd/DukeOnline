@@ -151,11 +151,25 @@
     }
     #pending-controls[hidden] { display: none; }
 
+    #pending-countdown {
+      font-size: 0.80rem;
+      opacity: 0.55;
+      font-style: italic;
+      white-space: nowrap;
+    }
+
     #confirm-btn {
       background: #4a2880;
       border-color: #9a60c0;
     }
     #confirm-btn:hover:not(:disabled) { background: #6a3aa0; }
+
+    #resign-btn[hidden] { display: none; }
+    #resign-btn.confirming {
+      background: #6a1a1a;
+      border-color: #c04040;
+    }
+    #resign-btn.confirming:hover { background: #8a2020; }
 
     /* ── Thinking indicator ─────────────────────────────────────────────────── */
 
@@ -299,11 +313,14 @@
 <div id="controls">
   <button id="draw-btn" disabled>Draw from Bag</button>
   <button id="cancel-btn" hidden>Cancel</button>
+  <button id="resign-btn" hidden>Resign</button>
+  <button id="lobby-btn">Lobby</button>
 </div>
 
 <div id="pending-controls" hidden>
   <button id="undo-btn">Undo Move</button>
   <button id="confirm-btn">Confirm Move</button>
+  <span id="pending-countdown"></span>
 </div>
 
 <div id="postgame-controls" hidden>
@@ -429,6 +446,36 @@ let animOverlay = null;       // { phase: 0|1, from: [c,r]|null, to: [c,r]|null 
 
 let _pendingMove     = null;  // staged move awaiting confirmation (or null)
 let _pendingPreState = null;  // board state snapshot before the staged move
+let _pendingTimerId  = null;  // setInterval ID for auto-confirm countdown
+let _pendingSeconds  = 0;     // seconds remaining on the countdown
+
+const PENDING_TIMEOUT = 20;   // seconds before auto-confirm fires
+
+function _startPendingTimer() {
+  _clearPendingTimer();
+  _pendingSeconds = PENDING_TIMEOUT;
+  _updateCountdown();
+  _pendingTimerId = setInterval(function () {
+    _pendingSeconds--;
+    _updateCountdown();
+    if (_pendingSeconds <= 0) {
+      _clearPendingTimer();
+      submitTurn();
+    }
+  }, 1000);
+}
+
+function _clearPendingTimer() {
+  if (_pendingTimerId) { clearInterval(_pendingTimerId); _pendingTimerId = null; }
+  _pendingSeconds = 0;
+  _updateCountdown();
+}
+
+function _updateCountdown() {
+  const el = document.getElementById('pending-countdown');
+  if (!el) return;
+  el.textContent = _pendingSeconds > 0 ? 'Auto-confirm in ' + _pendingSeconds + 's' : '';
+}
 
 // ─── Online mode ──────────────────────────────────────────────────────────────
 // Populated from URL params when arriving from index.html.
@@ -471,6 +518,11 @@ function _copyToClipboard(text, btn, originalLabel) {
 /** True when it is this client's turn to act. Always true in offline modes. */
 function _isMyTurn() {
   return !_onlineMode || state.currentPlayer === _myPlayerIndex;
+}
+
+/** True when Player 1's client should see the board rotated 180° (their pieces at bottom). */
+function _boardFlipped() {
+  return _onlineMode && _myPlayerIndex === 1;
 }
 
 /**
@@ -715,7 +767,7 @@ function resetUI() {
   document.getElementById('flip-preview').hidden = true;
 }
 
-function _showFlipPreview(col, row) {
+function _showFlipPreview(col, row, hint) {
   const cell = state.board[row]?.[col];
   if (!cell) { document.getElementById('flip-preview').hidden = true; return; }
 
@@ -726,7 +778,8 @@ function _showFlipPreview(col, row) {
   pc.height = sz;
   const pCtx = pc.getContext('2d');
 
-  if (cell.player === 1) {
+  const shouldRotate = _boardFlipped() ? cell.player === 0 : cell.player === 1;
+  if (shouldRotate) {
     pCtx.save();
     pCtx.translate(sz / 2, sz / 2);
     pCtx.rotate(Math.PI);
@@ -738,6 +791,8 @@ function _showFlipPreview(col, row) {
 
   document.getElementById('flip-tile-name').textContent =
     TILE_DISPLAY_NAMES[cell.type] ?? cell.type;
+  document.getElementById('flip-tile-hint').textContent =
+    hint || 'Flip side (after moving)';
   document.getElementById('flip-preview').hidden = false;
 }
 
@@ -804,21 +859,26 @@ function computeHighlights() {
 
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const hi = computeHighlights();
+  const hi      = computeHighlights();
+  const flipped = _boardFlipped();
 
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
-      const x  = c * cellSz;
-      const sy = (5 - r) * cellSz;   // row 0 → bottom of canvas
+      // When flipped (Player 1's perspective), rotate the board 180°:
+      // their pieces sit at the bottom, opponent's at the top.
+      const x  = flipped ? (5 - c) * cellSz : c * cellSz;
+      const sy = flipped ? r * cellSz        : (5 - r) * cellSz;
 
-      // Checkerboard cell
+      // Checkerboard cell (parity is preserved under 180° rotation)
       ctx.fillStyle = (c + r) % 2 === 0 ? CELL_LIGHT : CELL_DARK;
       ctx.fillRect(x, sy, cellSz, cellSz);
 
-      // Tile (if present); player 1's tiles are rotated 180° to face the white player
+      // Tiles facing away from the viewing player are rotated 180°.
+      // Normal view: Player 1's tiles rotate. Flipped view: Player 0's tiles rotate.
       const cell = state.board[r][c];
       if (cell) {
-        if (cell.player === 1) {
+        const shouldRotate = flipped ? cell.player === 0 : cell.player === 1;
+        if (shouldRotate) {
           ctx.save();
           ctx.translate(x + cellSz / 2, sy + cellSz / 2);
           ctx.rotate(Math.PI);
@@ -864,6 +924,26 @@ function render() {
     }
   }
 
+  // Guard highlight — red ring on the threatened Duke, drawn above all other overlays
+  if (state.phase === 'active' && isDukeInGuard(state)) {
+    const gp = state.currentPlayer;
+    outer: for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 6; c++) {
+        const cell = state.board[r][c];
+        if (cell && cell.type === 'duke' && cell.player === gp) {
+          const gx  = flipped ? (5 - c) * cellSz : c * cellSz;
+          const gsy = flipped ? r * cellSz        : (5 - r) * cellSz;
+          ctx.fillStyle = 'rgba(210, 30, 30, 0.28)';
+          ctx.fillRect(gx, gsy, cellSz, cellSz);
+          ctx.strokeStyle = 'rgba(220, 50, 50, 0.90)';
+          ctx.lineWidth   = 3;
+          ctx.strokeRect(gx + 1.5, gsy + 1.5, cellSz - 3, cellSz - 3);
+          break outer;
+        }
+      }
+    }
+  }
+
   // Board border — gold when a move is staged to signal "preview mode"
   ctx.strokeStyle = _pendingMove ? '#c8a020' : '#5a3a80';
   ctx.lineWidth   = _pendingMove ? 3 : 2;
@@ -877,15 +957,20 @@ function updateUI() {
   const msgEl    = document.getElementById('status-msg');
   const drawBtn  = document.getElementById('draw-btn');
 
+  const resignBtn = document.getElementById('resign-btn');
+
   if (state.phase === 'gameover') {
     const w = state.winner;
     playerEl.textContent = `Player ${w + 1} (${PLAYER_NAMES[w]}) wins!`;
     playerEl.style.color = w === 0 ? '#e8d9c0' : '#c8a477';
     msgEl.textContent    = 'View the final board, then start a New Game below.';
     drawBtn.disabled     = true;
+    resignBtn.hidden     = true;
     showGameOver();
     return;
   }
+
+  resignBtn.hidden = false;
 
   document.getElementById('gameover-overlay').hidden = true;
 
@@ -1011,8 +1096,8 @@ canvas.addEventListener('click', function (evt) {
   const scaleY = canvas.height / rect.height;
   const x      = (evt.clientX - rect.left) * scaleX;
   const y      = (evt.clientY - rect.top)  * scaleY;
-  const col    = Math.floor(x / cellSz);
-  const row    = 5 - Math.floor(y / cellSz);
+  const col    = _boardFlipped() ? 5 - Math.floor(x / cellSz) : Math.floor(x / cellSz);
+  const row    = _boardFlipped() ? Math.floor(y / cellSz)      : 5 - Math.floor(y / cellSz);
   if (col < 0 || col > 5 || row < 0 || row > 5) return;
   handleClick(col, row);
 });
@@ -1024,16 +1109,18 @@ canvas.addEventListener('mousemove', function (evt) {
   const scaleY = canvas.height / rect.height;
   const x      = (evt.clientX - rect.left) * scaleX;
   const y      = (evt.clientY - rect.top)  * scaleY;
-  const col    = Math.floor(x / cellSz);
-  const row    = 5 - Math.floor(y / cellSz);
+  const col    = _boardFlipped() ? 5 - Math.floor(x / cellSz) : Math.floor(x / cellSz);
+  const row    = _boardFlipped() ? Math.floor(y / cellSz)      : 5 - Math.floor(y / cellSz);
   if (col < 0 || col > 5 || row < 0 || row > 5) { canvas.style.cursor = 'default'; return; }
 
   const hi   = computeHighlights();
   const cell = state.board[row]?.[col];
   const p    = state.currentPlayer;
+  const isBrowseTurn = state.phase === 'active' && (!_isMyTurn() || aiThinking);
   const isInteractive =
     hi.has(cellKey(col, row)) ||
-    (state.phase === 'active' && uiMode === 'idle' && cell?.player === p);
+    (state.phase === 'active' && uiMode === 'idle' && cell?.player === p) ||
+    (isBrowseTurn && cell !== null);
   canvas.style.cursor = isInteractive ? 'pointer' : 'default';
 });
 
@@ -1053,13 +1140,22 @@ function handleClick(col, row) {
       state = applySetupPlacement(state, col, row);
       _pendingMove = { action: 'setup' };
       document.getElementById('pending-controls').hidden = false;
+      _startPendingTimer();
       render(); updateUI();
     }
     return;
   }
 
   if (state.phase !== 'active') return;
-  if (!_isMyTurn()) return;          // online: block input on opponent's turn
+
+  // During opponent's turn (or while AI is thinking): allow clicking any tile
+  // to browse its reverse side for strategic planning, but block all actions.
+  if (!_isMyTurn() || aiThinking) {
+    _showFlipPreview(col, row, 'Reverse side');
+    render(); updateUI();
+    return;
+  }
+
   if (_pendingMove !== null) return; // staging: wait for confirm or undo
 
   // ── Draw placement mode ─────────────────────────────────────────────────────
@@ -1155,23 +1251,13 @@ function commitMove(move) {
   const postState = applyMove(preState, move);
   resetUI();
 
-  if (postState.phase === 'gameover') {
-    // Winning move — auto-commit immediately, no staging needed
-    playMoveAnimation(preState, postState, move, function () {
-      legalMoves = [];
-      render(); updateUI();
-      if (_onlineMode) _syncToFirestore(move).catch(console.error);
-      else triggerAI();
-    });
-    return;
-  }
-
-  // All other moves: animate the preview, then hold for player review
+  // All moves (including winning ones): animate the preview, then hold for player review
   playMoveAnimation(preState, postState, move, function () {
     _pendingMove     = move;
     _pendingPreState = preState;
     legalMoves = [];   // block further moves until confirmed
     document.getElementById('pending-controls').hidden = false;
+    _startPendingTimer();
     render(); updateUI();
   });
 }
@@ -1183,6 +1269,7 @@ function commitMove(move) {
  * Called when the player clicks "Confirm Move".
  */
 function submitTurn() {
+  _clearPendingTimer();
   const move       = _pendingMove;
   _pendingMove     = null;
   _pendingPreState = null;
@@ -1224,6 +1311,7 @@ function submitTurn() {
  * the player can choose a different action.
  */
 function undoMove() {
+  _clearPendingTimer();
   const wasDrawPlacement = _pendingMove && _pendingMove.action === 'draw';
   state            = _pendingPreState;
   _pendingMove     = null;
@@ -1293,6 +1381,11 @@ canvas.addEventListener('dblclick', function () {
 });
 
 function _resetForNewGame() {
+  _clearPendingTimer();
+  _resignConfirming = false;
+  const resignBtn = document.getElementById('resign-btn');
+  resignBtn.textContent = 'Resign';
+  resignBtn.classList.remove('confirming');
   document.getElementById('gameover-overlay').hidden  = true;
   document.getElementById('postgame-controls').hidden = true;
   document.getElementById('pending-controls').hidden  = true;
@@ -1314,10 +1407,52 @@ document.getElementById('gameover-close').addEventListener('click', function () 
 });
 
 document.getElementById('new-game-btn').addEventListener('click', _resetForNewGame);
-document.getElementById('lobby-btn-post').addEventListener('click', function () {
+function _goToLobby() {
   if (_onlineUnsub) _onlineUnsub();
   window.location.href = 'index.html';
+}
+
+// ─── Resign ───────────────────────────────────────────────────────────────────
+
+let _resignConfirming = false;
+
+function resignGame() {
+  _clearPendingTimer();
+  _resignConfirming = false;
+  const resignBtn = document.getElementById('resign-btn');
+  resignBtn.textContent = 'Resign';
+  resignBtn.classList.remove('confirming');
+
+  // The resigning player loses — set winner to the opponent.
+  const loser = _onlineMode ? _myPlayerIndex : state.currentPlayer;
+  state = Object.assign({}, state, { phase: 'gameover', winner: 1 - loser });
+
+  legalMoves = [];
+  resetUI();
+  render(); updateUI();
+  if (_onlineMode) _syncToFirestore(null).catch(console.error);
+}
+
+document.getElementById('resign-btn').addEventListener('click', function () {
+  if (!_resignConfirming) {
+    _resignConfirming = true;
+    this.textContent = 'Confirm Resign';
+    this.classList.add('confirming');
+    // Auto-revert after 4 seconds if not confirmed
+    setTimeout(() => {
+      if (_resignConfirming) {
+        _resignConfirming = false;
+        this.textContent = 'Resign';
+        this.classList.remove('confirming');
+      }
+    }, 4000);
+  } else {
+    resignGame();
+  }
 });
+
+document.getElementById('lobby-btn').addEventListener('click', _goToLobby);
+document.getElementById('lobby-btn-post').addEventListener('click', _goToLobby);
 
 document.getElementById('mode-hotseat').addEventListener('click', () => startNewGame('hotseat'));
 document.getElementById('mode-ai').addEventListener('click', function () {
@@ -1379,6 +1514,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.11.01</div>
+<div class="version">2026.04.13.04</div>
 </body>
 </html>

@@ -480,6 +480,12 @@ function clearError() {
 document.getElementById('create-btn').addEventListener('click', async function () {
   this.disabled = true;
   clearError();
+  if (!_playerName()) {
+    showError('Enter your name before creating a game.');
+    document.getElementById('player-name').focus();
+    this.disabled = false;
+    return;
+  }
   try {
     await initFirebase();
 
@@ -583,6 +589,11 @@ async function handleJoin() {
   const raw  = document.getElementById('join-input').value.trim().toUpperCase();
   clearError();
 
+  if (!_playerName()) {
+    showError('Enter your name before joining a game.');
+    document.getElementById('player-name').focus();
+    return;
+  }
   if (raw.length === 0) { showError('Enter a game code.'); return; }
   if (raw.length !== 6) { showError('Codes are 6 letters.'); return; }
 
@@ -625,6 +636,6 @@ document.getElementById('local-btn').addEventListener('click', function () {
 
 </script>
 
-<div class="version">2026.04.11.01</div>
+<div class="version">2026.04.13.01</div>
 </body>
 </html>
