@@ -146,32 +146,62 @@
       color: #70c870;
     }
 
-    /* ── Player name ─────────────────────────────────────────────────────────── */
+    /* ── Identity bar (shown when logged in) ─────────────────────────────────── */
 
-    .name-row {
+    #identity-bar {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 0.88rem;
+      font-size: 0.82rem;
       opacity: 0.70;
+      width: min(360px, 100%);
     }
 
-    .name-row:focus-within { opacity: 1; }
+    #identity-bar[hidden] { display: none; }
 
-    .name-row label { white-space: nowrap; }
+    #identity-bar .identity-label { flex: 1; }
 
-    .name-row input {
+    #identity-name {
+      color: #c8a020;
+      font-weight: bold;
+    }
+
+    #signout-btn {
+      width: auto;
+      background: none;
+      border: 1px solid #3a2060;
+      padding: 3px 10px;
+      font-size: 0.78rem;
+      opacity: 0.60;
+    }
+
+    #signout-btn:hover { opacity: 1; background: #3d1f6a; border-color: #7a50a0; }
+
+    /* ── Login form fields ───────────────────────────────────────────────────── */
+
+    .field-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field-row label {
+      font-size: 0.80rem;
+      opacity: 0.65;
+      letter-spacing: 0.04em;
+    }
+
+    .field-row input {
       background: #1a0f2e;
       color: #ede0c8;
-      border: 1px solid #3a2060;
+      border: 1px solid #5a3a80;
       border-radius: 4px;
-      padding: 6px 10px;
+      padding: 8px 10px;
       font-family: inherit;
-      font-size: 0.88rem;
-      width: 160px;
+      font-size: 0.9rem;
     }
 
-    .name-row input:focus { outline: 1px solid #7a50a0; }
+    .field-row input:focus { outline: 1px solid #7a50a0; }
 
     /* ── Divider ─────────────────────────────────────────────────────────────── */
 
@@ -275,10 +305,30 @@
 
 <h1>The Duke</h1>
 
-<div class="name-row">
-  <label for="player-name">Your name:</label>
-  <input type="text" id="player-name" placeholder="Anonymous" maxlength="20"
-         autocomplete="off" spellcheck="false">
+<!-- Identity bar — shown when logged in -->
+<div id="identity-bar" hidden>
+  <span class="identity-label">Playing as <span id="identity-name"></span></span>
+  <button id="signout-btn">Sign Out</button>
+</div>
+
+<!-- Login card — shown when not logged in -->
+<div class="card" id="login-card">
+  <h2>Sign In</h2>
+  <p class="info-msg" style="text-align:left">Choose a username and 4+ digit PIN to sign in.<br>New username? An account is created automatically.</p>
+  <form id="login-form" style="display:flex;flex-direction:column;gap:14px">
+    <div class="field-row">
+      <label for="login-username">Username</label>
+      <input type="text" id="login-username" placeholder="e.g. PlayerName" maxlength="20"
+             autocomplete="username" spellcheck="false">
+    </div>
+    <div class="field-row">
+      <label for="login-pin">PIN (digits only)</label>
+      <input type="password" id="login-pin" placeholder="4 or more digits" maxlength="12"
+             autocomplete="current-password" inputmode="numeric" pattern="[0-9]*">
+    </div>
+    <div class="error-msg" id="login-error"></div>
+    <button type="submit" id="login-btn">Sign In</button>
+  </form>
 </div>
 
 <!-- My Games (hidden until populated) -->
@@ -289,8 +339,8 @@
   </div>
 </div>
 
-<!-- Online: default view -->
-<div class="card" id="online-card">
+<!-- Online: default view (hidden until logged in) -->
+<div class="card" id="online-card" hidden>
   <h2>Play Online</h2>
   <button id="create-btn">Create Game</button>
   <div class="join-row">
@@ -320,9 +370,8 @@
   <button id="local-btn">Local Game</button>
 </div>
 
-<!-- Firebase compat SDK -->
+<!-- Firebase compat SDK (no Auth — identity is username+PIN hash) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
 <!-- Tile renderer for favicon -->
@@ -348,17 +397,131 @@
   document.head.appendChild(link);
 }());
 
-// ─── Player name (localStorage) ──────────────────────────────────────────────
+// ─── Identity helpers ─────────────────────────────────────────────────────────
 
-const _nameInput = document.getElementById('player-name');
-_nameInput.value = localStorage.getItem('duke_player_name') || '';
-_nameInput.addEventListener('input', function () {
-  localStorage.setItem('duke_player_name', this.value.trim());
+function _getUsername() { return localStorage.getItem('duke_username') || ''; }
+function _getUserId()   { return localStorage.getItem('duke_user_id')  || ''; }
+function _playerName()  { return localStorage.getItem('duke_player_name') || ''; }
+
+/**
+ * Hash username+PIN with a fixed app salt using SHA-256 (Web Crypto API).
+ * The hash is the canonical userId — same username+PIN on any device yields
+ * the same hash.
+ */
+async function _hashUserId(username, pin) {
+  const APP_SALT = 'duke-online-v1';
+  const raw = username.toLowerCase() + ':' + pin + ':' + APP_SALT;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── Login / logout ───────────────────────────────────────────────────────────
+
+function _showLobby() {
+  document.getElementById('login-card').hidden    = true;
+  document.getElementById('identity-bar').hidden  = false;
+  document.getElementById('identity-name').textContent = _getUsername();
+  document.getElementById('online-card').hidden   = false;
+  renderMyGames();
+}
+
+function _showLogin() {
+  document.getElementById('login-card').hidden    = false;
+  document.getElementById('identity-bar').hidden  = true;
+  document.getElementById('online-card').hidden   = true;
+  document.getElementById('my-games-card').hidden = true;
+  // Also reset any in-progress create flow
+  document.getElementById('create-card').hidden   = true;
+  document.getElementById('online-card').hidden   = true;
+}
+
+// Form submit handles both button click and Enter in the PIN field.
+document.getElementById('login-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  handleLogin();
+});
+// Enter in the username field moves focus to PIN rather than submitting.
+document.getElementById('login-username').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('login-pin').focus(); }
 });
 
-function _playerName() {
-  return localStorage.getItem('duke_player_name') || '';
+async function handleLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const pin      = document.getElementById('login-pin').value.trim();
+  const btn      = document.getElementById('login-btn');
+  const errEl    = document.getElementById('login-error');
+
+  errEl.textContent = '';
+
+  // crypto.subtle is only available over HTTPS (secure context).
+  if (!window.isSecureContext) {
+    errEl.textContent = 'Sign-in requires HTTPS. Make sure your URL starts with https://.';
+    return;
+  }
+
+  if (!username) { errEl.textContent = 'Enter a username.'; return; }
+  if (!/^[a-zA-Z0-9 _-]{1,20}$/.test(username)) {
+    errEl.textContent = 'Username: letters, numbers, spaces, _ or - only.';
+    return;
+  }
+  if (!pin || !/^\d{4,}$/.test(pin)) {
+    errEl.textContent = 'PIN must be at least 4 digits.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in\u2026';
+
+  try {
+    await initFirebase();
+    const userId = await _hashUserId(username, pin);
+    const result = await lookupOrCreateUser(username, userId);
+
+    if (!result.ok) {
+      errEl.textContent = 'Incorrect PIN for that username.';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+      return;
+    }
+
+    // Store identity in localStorage — persists across sessions on this device.
+    const displayName = result.displayName || username;
+    localStorage.setItem('duke_username',    displayName);
+    localStorage.setItem('duke_user_id',     userId);
+    localStorage.setItem('duke_player_name', displayName);  // read by game.html
+
+    // Sync game list from Firestore to localStorage for cross-device access.
+    try {
+      const firestoreGames = await getUserGames(username);
+      if (firestoreGames.length > 0) {
+        const localGames = _loadMyGames();
+        const codes      = new Set(firestoreGames.map(g => g.code));
+        const extra      = localGames.filter(g => !codes.has(g.code));
+        _saveMyGames([...firestoreGames, ...extra]);
+      }
+    } catch (_) { /* non-fatal — localStorage games are still shown */ }
+
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+    _showLobby();
+
+  } catch (e) {
+    console.error(e);
+    errEl.textContent = 'Connection error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
 }
+
+document.getElementById('signout-btn').addEventListener('click', function () {
+  localStorage.removeItem('duke_username');
+  localStorage.removeItem('duke_user_id');
+  localStorage.removeItem('duke_player_name');
+  // Clear any in-progress create state
+  if (_createUnsub) { _createUnsub(); _createUnsub = null; }
+  _createCode = null;
+  _showLogin();
+});
 
 // ─── My Games — localStorage helpers ─────────────────────────────────────────
 
@@ -372,9 +535,9 @@ function _saveMyGames(list) {
 }
 
 function saveMyGame(code, player, seed) {
-  const list = _loadMyGames().filter(g => g.code !== code); // dedupe
-  list.unshift({ code, player, seed });                      // newest first
-  _saveMyGames(list.slice(0, 20));
+  const list = _loadMyGames().filter(g => g.code !== code);
+  list.unshift({ code, player, seed });
+  _saveMyGames(list.slice(0, 50));
 }
 
 function removeMyGame(code) {
@@ -383,7 +546,22 @@ function removeMyGame(code) {
 }
 
 async function renderMyGames() {
-  const list = _loadMyGames();
+  const username = _getUsername();
+  let list = _loadMyGames();
+
+  // If logged in, sync from Firestore (cross-device game list).
+  if (username) {
+    try {
+      const firestoreGames = await getUserGames(username);
+      if (firestoreGames.length > 0) {
+        const codes = new Set(firestoreGames.map(g => g.code));
+        const extra = list.filter(g => !codes.has(g.code));
+        list = [...firestoreGames, ...extra];
+        _saveMyGames(list);
+      }
+    } catch (_) { /* use localStorage list as fallback */ }
+  }
+
   const card = document.getElementById('my-games-card');
   const body = document.getElementById('my-games-body');
 
@@ -406,11 +584,10 @@ async function renderMyGames() {
       }
     }));
   } catch (_) {
-    // Firebase not ready — show list without live status
     fetched = list.map(g => ({ ...g, status: 'unknown', opponentName: '' }));
   }
 
-  // Silently remove games that no longer exist in Firestore
+  // Silently remove games that no longer exist in Firestore.
   const dead = fetched.filter(g => g._dead).map(g => g.code);
   if (dead.length) {
     _saveMyGames(_loadMyGames().filter(g => !dead.includes(g.code)));
@@ -460,60 +637,47 @@ async function renderMyGames() {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-let _createCode   = null;   // code for the game we just created
-let _createSeed   = null;   // seed passed to game.html via URL
-let _createFP     = null;   // firstPlayer for the created game
-let _createUnsub  = null;   // Firestore listener for created game
+let _createCode   = null;
+let _createSeed   = null;
+let _createFP     = null;
+let _createUnsub  = null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function showError(msg) {
-  document.getElementById('join-error').textContent = msg;
-}
-
-function clearError() {
-  document.getElementById('join-error').textContent = '';
-}
+function showError(msg) { document.getElementById('join-error').textContent = msg; }
+function clearError()   { document.getElementById('join-error').textContent = ''; }
 
 // ─── Create flow ──────────────────────────────────────────────────────────────
 
 document.getElementById('create-btn').addEventListener('click', async function () {
   this.disabled = true;
   clearError();
-  if (!_playerName()) {
-    showError('Enter your name before creating a game.');
-    document.getElementById('player-name').focus();
+
+  const username = _getUsername();
+  const userId   = _getUserId();
+  if (!username) {
+    showError('Sign in before creating a game.');
     this.disabled = false;
     return;
   }
+
   try {
     await initFirebase();
 
-    // Generate a seed; derive firstPlayer using the same PRNG as game.js.
-    // We run _mulberry32 for enough steps to match createGame()'s bag shuffles
-    // then read firstPlayer — but it's simpler to just use Math.random() here
-    // since both clients will reconstruct identical state from the seed via createGame().
     _createSeed = Date.now() ^ (Math.random() * 0xFFFFFFFF | 0);
+    _createFP   = Math.round(Math.random());
 
-    // Determine firstPlayer: replicate the logic in createGame().
-    // createGame shuffles bag0 and bag1 (each N draws), then does Math.floor(rng()*2).
-    // Rather than replicating the shuffle, we compute it properly using game.js
-    // which is NOT loaded on index.html.  Instead we just compute a random firstPlayer
-    // here and pass it; game.html will re-derive it from seed (identical result).
-    // We only need firstPlayer in the Firestore doc for informational purposes.
-    // The authoritative value comes from createGame({ seed }) on game.html.
-    _createFP = Math.round(Math.random());  // 0 or 1
-
-    const { code } = await createOnlineGame(_createSeed, _createFP, _playerName());
+    const { code } = await createOnlineGame(_createSeed, _createFP, username, userId);
     _createCode = code;
-    saveMyGame(code, 0, _createSeed);
 
-    // Switch to "code sharing" panel
+    saveMyGame(code, 0, _createSeed);
+    // Also persist to Firestore so the game appears on other devices.
+    addGameToUser(username, userId, { code, player: 0, seed: _createSeed }).catch(console.error);
+
     document.getElementById('online-card').hidden  = true;
     document.getElementById('create-card').hidden  = false;
     document.getElementById('code-value').textContent = code;
 
-    // Listen for player 1 joining
     _createUnsub = listenToGame(code, function (data) {
       if (data.status === 'active') {
         const ws = document.getElementById('waiting-status');
@@ -530,7 +694,6 @@ document.getElementById('create-btn').addEventListener('click', async function (
 });
 
 // ─── Copy helper ─────────────────────────────────────────────────────────────
-// Uses execCommand (works without page focus) with Clipboard API as backup.
 
 function _copyText(text, btn, originalLabel) {
   const ta = document.createElement('textarea');
@@ -561,8 +724,7 @@ document.getElementById('copy-btn').addEventListener('click', function () {
 document.getElementById('enter-btn').addEventListener('click', function () {
   if (!_createCode) return;
   if (_createUnsub) _createUnsub();
-  window.location.href =
-    `game.html?code=${_createCode}&player=0&seed=${_createSeed}`;
+  window.location.href = `game.html?code=${_createCode}&player=0&seed=${_createSeed}`;
 });
 
 // ─── Cancel create ────────────────────────────────────────────────────────────
@@ -573,8 +735,7 @@ document.getElementById('cancel-btn').addEventListener('click', function () {
   document.getElementById('create-card').hidden  = true;
   document.getElementById('online-card').hidden  = false;
   document.getElementById('create-btn').disabled = false;
-  document.getElementById('waiting-status').textContent =
-    'Waiting for opponent to join\u2026';
+  document.getElementById('waiting-status').textContent = 'Waiting for opponent to join\u2026';
   document.getElementById('waiting-status').classList.remove('joined');
 });
 
@@ -586,14 +747,12 @@ document.getElementById('join-input').addEventListener('keydown', function (e) {
 });
 
 async function handleJoin() {
-  const raw  = document.getElementById('join-input').value.trim().toUpperCase();
+  const raw      = document.getElementById('join-input').value.trim().toUpperCase();
+  const username = _getUsername();
+  const userId   = _getUserId();
   clearError();
 
-  if (!_playerName()) {
-    showError('Enter your name before joining a game.');
-    document.getElementById('player-name').focus();
-    return;
-  }
+  if (!username) { showError('Sign in before joining a game.'); return; }
   if (raw.length === 0) { showError('Enter a game code.'); return; }
   if (raw.length !== 6) { showError('Codes are 6 letters.'); return; }
 
@@ -602,7 +761,7 @@ async function handleJoin() {
 
   try {
     await initFirebase();
-    const result = await joinOnlineGame(raw, _playerName());
+    const result = await joinOnlineGame(raw, username, userId);
 
     if (!result) {
       showError('Game not found or already full.');
@@ -611,8 +770,8 @@ async function handleJoin() {
     }
 
     saveMyGame(raw, 1, result.seed);
-    window.location.href =
-      `game.html?code=${raw}&player=1&seed=${result.seed}`;
+    addGameToUser(username, userId, { code: raw, player: 1, seed: result.seed }).catch(console.error);
+    window.location.href = `game.html?code=${raw}&player=1&seed=${result.seed}`;
 
   } catch (e) {
     console.error(e);
@@ -627,15 +786,19 @@ document.getElementById('local-btn').addEventListener('click', function () {
   window.location.href = 'game.html';
 });
 
-// ─── Eager init + render My Games ─────────────────────────────────────────────
+// ─── Boot ─────────────────────────────────────────────────────────────────────
 
 (async () => {
-  try { await initFirebase(); } catch (_) {}
-  renderMyGames();
+  // If identity is already stored on this device, skip login and show lobby.
+  if (_getUsername() && _getUserId()) {
+    try { await initFirebase(); } catch (_) {}
+    _showLobby();
+  }
+  // Otherwise the login card is visible by default — no action needed.
 })();
 
 </script>
 
-<div class="version">2026.04.13.01</div>
+<div class="version">2026.04.14.03</div>
 </body>
 </html>

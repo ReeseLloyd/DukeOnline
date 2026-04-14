@@ -6,7 +6,7 @@ The Duke is a two-player abstract strategy game played on a 6×6 grid. Players d
 
 ## Status
 
-Early development — base game, hotseat (local two-player) only.
+Active development — base game with online multiplayer, AI opponent, and hotseat mode.
 
 ## How to Play
 

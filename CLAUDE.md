@@ -79,6 +79,10 @@ Architecture decided. No code yet. See `_resources/` for reference materials (ru
 
 [2026-04-08] Auth: anonymous auth only for now. Players get an anonymous Firebase identity automatically — no sign-in required to play. Can upgrade to Google sign-in later if account persistence / match history becomes a requirement.
 
+[2026-04-14] Auth replaced with username + PIN identity. Anonymous Firebase Auth removed entirely. Identity is SHA-256(username.lower + ':' + pin + ':' + 'duke-online-v1') — deterministic across devices, no server needed. Firestore `users/{username}` stores userId hash + game list. Firestore security rules: game writes are open (trusted client); user doc updates require the client to echo the stored userId (lightweight PIN enforcement without server-side crypto). No backward compatibility with pre-existing anonymous-auth games.
+
+[2026-04-14] Auth Option B noted for future: Firebase Email Magic Link (passwordless). Zero-friction, real Firebase Auth, proper account ownership. Upgrade path if the game grows beyond a small friend group. Implementation: enable Email Link sign-in in Firebase console, call sendSignInLinkToEmail / signInWithEmailLink — Firebase handles everything, no Cloud Functions needed.
+
 ## What Hasn't Worked
 
 <!-- Populate as development proceeds -->

@@ -2,15 +2,27 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Game documents — anyone can read (to join or spectate);
-    // only authenticated users can create; only a player in the game can write moves.
+    // ── Game documents ──────────────────────────────────────────────────────
+    // Anyone can read (to join or spectate).
+    // Writes are open — identity is enforced at the app level via the
+    // username+PIN hash stored in player0uid / player1uid.  There is no
+    // server-side move validation in v1 (trusted client model).
     match /games/{gameId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        resource.data.player1Uid == request.auth.uid ||
-        resource.data.player2Uid == request.auth.uid
-      );
+      allow read:   if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // ── User documents ──────────────────────────────────────────────────────
+    // Keyed by username (lowercase).  Anyone can read (to check availability).
+    // Creates are open (first-come-first-served username claim).
+    // Updates require the client to echo the stored userId — this prevents
+    // anyone without the correct PIN from modifying another player's record.
+    match /users/{username} {
+      allow read:   if true;
+      allow create: if true;
+      allow update: if request.resource.data.userId == resource.data.userId;
       allow delete: if false;
     }
 

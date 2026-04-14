@@ -4,9 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Duke</title>
-  <!-- Firebase compat SDK (loaded here so it's available in the inline script) -->
+  <!-- Firebase compat SDK (no Auth — identity is username+PIN hash) -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -441,15 +440,16 @@ let gameMode   = 'hotseat';   // 'hotseat' | 'ai'
 let aiDepth    = 4;           // search depth — set by difficulty selector
 let aiWorker   = null;
 let aiThinking = false;
-let animating  = false;       // true while a move animation is playing
-let animOverlay = null;       // { phase: 0|1, from: [c,r]|null, to: [c,r]|null }
+let animating        = false;  // true while a move animation is playing
+let animOverlay      = null;   // { phase: 0|1, from: [c,r]|null, to: [c,r]|null }
+let _stagingAnimation = false; // true only during the player's own move-staging animation
 
 let _pendingMove     = null;  // staged move awaiting confirmation (or null)
 let _pendingPreState = null;  // board state snapshot before the staged move
 let _pendingTimerId  = null;  // setInterval ID for auto-confirm countdown
 let _pendingSeconds  = 0;     // seconds remaining on the countdown
 
-const PENDING_TIMEOUT = 20;   // seconds before auto-confirm fires
+const PENDING_TIMEOUT = 60;   // seconds before auto-confirm fires
 
 function _startPendingTimer() {
   _clearPendingTimer();
@@ -475,6 +475,45 @@ function _updateCountdown() {
   const el = document.getElementById('pending-countdown');
   if (!el) return;
   el.textContent = _pendingSeconds > 0 ? 'Auto-confirm in ' + _pendingSeconds + 's' : '';
+}
+
+// ─── Draw-mode persistence (online) ──────────────────────────────────────────
+// When a player clicks "Draw from Bag" they are committed to placing that tile
+// this turn. If they navigate to the lobby and return before placing, we must
+// restore draw mode so they can't escape the obligation.
+// The flag is keyed by game code + turn number so stale flags are ignored.
+
+function _saveDrawCommitted() {
+  if (!_onlineMode) return;
+  localStorage.setItem('duke_draw_' + _onlineCode, state.turn.toString());
+}
+
+function _clearDrawCommitted() {
+  if (!_onlineMode) return;
+  localStorage.removeItem('duke_draw_' + _onlineCode);
+}
+
+/**
+ * Called after state/legalMoves are updated. If the player had clicked
+ * "Draw from Bag" this turn and navigated away, re-enter draw mode so they
+ * cannot sidestep the draw obligation by returning to the lobby.
+ */
+function _checkRestoreDrawMode() {
+  if (!_onlineMode || state.phase !== 'active' || !_isMyTurn() || _pendingMove !== null) return;
+  const saved = localStorage.getItem('duke_draw_' + _onlineCode);
+  if (saved === null || parseInt(saved) !== state.turn) return;
+
+  enterMode('draw');
+  const p    = state.currentPlayer;
+  const next = peekBag(state, p);
+  if (next) {
+    const pc  = document.getElementById('draw-tile-canvas');
+    const sz  = 90;
+    pc.width  = sz; pc.height = sz;
+    drawTile(pc.getContext('2d'), 0, 0, sz, next, 0, p);
+    document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[next] ?? next;
+    document.getElementById('draw-preview').hidden = false;
+  }
 }
 
 // ─── Online mode ──────────────────────────────────────────────────────────────
@@ -578,6 +617,7 @@ function _onGameSnapshot(data) {
     playMoveAnimation(preState, newState, lastMove, function () {
       state      = newState;
       legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+      _checkRestoreDrawMode();
       render();
       updateUI();
     });
@@ -585,6 +625,7 @@ function _onGameSnapshot(data) {
     // Setup placement — instant snap.
     state      = newState;
     legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+    _checkRestoreDrawMode();
     render();
     updateUI();
   }
@@ -924,8 +965,14 @@ function render() {
     }
   }
 
-  // Guard highlight — red ring on the threatened Duke, drawn above all other overlays
-  if (state.phase === 'active' && isDukeInGuard(state)) {
+  // Guard highlight — red ring on the threatened Duke, drawn above all other overlays.
+  // Guard is a "you're in danger — act" signal, so it only shows when a local human player
+  // is the one to move.  This suppresses flashes in all modes:
+  //   hotseat  — both players share the screen, so always shown
+  //   AI       — only when the human (player 0) is to move, not during the AI's turn
+  //   online   — only when it's this client's turn, not while waiting for the opponent
+  // Also suppressed during animation and while a move is staged (prevents hunting).
+  if (state.phase === 'active' && !_stagingAnimation && _pendingMove === null && isDukeInGuard(state)) {
     const gp = state.currentPlayer;
     outer: for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 6; c++) {
@@ -966,7 +1013,9 @@ function updateUI() {
 
   const resignBtn = document.getElementById('resign-btn');
 
-  if (state.phase === 'gameover') {
+  // Suppress the win declaration until the move is confirmed — prevents
+  // hunting for a winning move by staging, checking result, then undoing.
+  if (state.phase === 'gameover' && _pendingMove === null) {
     const w = state.winner;
     playerEl.textContent = `Player ${w + 1} (${PLAYER_NAMES[w]}) wins!`;
     playerEl.style.color = w === 0 ? '#e8d9c0' : '#c8a477';
@@ -1259,7 +1308,9 @@ function commitMove(move) {
   resetUI();
 
   // All moves (including winning ones): animate the preview, then hold for player review
+  _stagingAnimation = true;
   playMoveAnimation(preState, postState, move, function () {
+    _stagingAnimation = false;
     _pendingMove     = move;
     _pendingPreState = preState;
     legalMoves = [];   // block further moves until confirmed
@@ -1277,6 +1328,7 @@ function commitMove(move) {
  */
 function submitTurn() {
   _clearPendingTimer();
+  _clearDrawCommitted();
   const move       = _pendingMove;
   _pendingMove     = null;
   _pendingPreState = null;
@@ -1353,6 +1405,7 @@ function undoMove() {
 
 document.getElementById('draw-btn').addEventListener('click', function () {
   enterMode('draw');
+  _saveDrawCommitted();   // persist obligation so lobby-and-return can't escape it
   document.getElementById('flip-preview').hidden = true;
 
   // Reveal the tile that will be drawn so the player can plan placement
@@ -1425,6 +1478,7 @@ let _resignConfirming = false;
 
 function resignGame() {
   _clearPendingTimer();
+  _clearDrawCommitted();
   _resignConfirming = false;
   const resignBtn = document.getElementById('resign-btn');
   resignBtn.textContent = 'Resign';
@@ -1549,6 +1603,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.13.05</div>
+<div class="version">2026.04.14.06</div>
 </body>
 </html>

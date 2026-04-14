@@ -2,27 +2,51 @@
  * firebase.js
  * Firebase initialisation and Firestore helpers for DukeOnline multiplayer.
  *
- * Depends on: Firebase compat SDK v10+ (app, auth, firestore) loaded via CDN
- * before this file.
+ * Depends on: Firebase compat SDK v10+ (app, firestore) loaded via CDN
+ * before this file.  Firebase Auth is NOT used — identity is established
+ * via username + PIN hash (see lookupOrCreateUser).
  *
- * Public API (all globally accessible):
- *   initFirebase()                          → Promise<void>
- *   createOnlineGame(seed, firstPlayer)     → Promise<{ code }>
- *   joinOnlineGame(code)                    → Promise<{ seed, firstPlayer }|null>
- *   listenToGame(code, callback)            → unsubscribe()
- *   writeGameState(code, state, move)       → Promise<void>
- *   getUid()                                → string|null
+ * ─── Public API ───────────────────────────────────────────────────────────────
  *
- * Firestore document shape  (games/{code}):
- *   status:      'waiting' | 'active' | 'gameover'
- *   player0uid:  string
- *   player1uid:  string | null
- *   seed:        number          shared PRNG seed — both clients call createGame({ seed })
- *   firstPlayer: 0 | 1          derived from seed, stored for quick reference
- *   state:       object | null   full serialised GameState (null until first placement)
- *   lastMove:    object | null   move that produced current state (null for setup steps)
- *   createdAt:   Timestamp
- *   updatedAt:   Timestamp
+ *   initFirebase()                                            → Promise<void>
+ *
+ *   lookupOrCreateUser(username, userId)
+ *     → Promise<{ ok, created?, displayName?, error? }>
+ *     Checks Firestore for username.  Creates account if new; verifies PIN
+ *     hash if existing.  error: 'incorrect_pin' on mismatch.
+ *
+ *   getUserGames(username)                                    → Promise<Array>
+ *     Returns the stored game list for the user, newest-first.
+ *
+ *   addGameToUser(username, userId, game)                     → Promise<void>
+ *     Adds/updates { code, player, seed } in the user's game list.
+ *     userId must be echoed to satisfy the Firestore update rule.
+ *
+ *   createOnlineGame(seed, firstPlayer, playerName, userId)   → Promise<{ code }>
+ *   joinOnlineGame(code, playerName, userId)                  → Promise<{ seed, firstPlayer }|null>
+ *   listenToGame(code, callback)                              → unsubscribe()
+ *   writeGameState(code, state, move)                         → Promise<void>
+ *
+ * ─── Firestore collections ────────────────────────────────────────────────────
+ *
+ *   games/{code}
+ *     status:      'waiting' | 'active' | 'gameover'
+ *     player0uid:  string   SHA-256 hash of player 0's username+PIN
+ *     player0name: string
+ *     player1uid:  string | null
+ *     player1name: string
+ *     seed:        number
+ *     firstPlayer: 0 | 1
+ *     state:       object | null
+ *     lastMove:    object | null
+ *     createdAt:   Timestamp
+ *     updatedAt:   Timestamp
+ *
+ *   users/{username_lowercase}
+ *     userId:      string   SHA-256 hash (the identity key)
+ *     displayName: string   original-casing username
+ *     games:       Array<{ code, player, seed }>   newest-first, capped at 50
+ *     createdAt:   Timestamp
  */
 
 'use strict';
@@ -39,25 +63,24 @@ const _FIREBASE_CONFIG = {
 // Code alphabet: 23 uppercase letters, ambiguous chars removed (I, L, O)
 const _CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 
-let _db  = null;
-let _uid = null;
+let _db          = null;
+let _initPromise = null;
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 /**
- * Initialise Firebase and sign in anonymously.
- * Safe to call multiple times — resolves immediately after the first call.
+ * Initialise Firebase and Firestore.
+ * Safe to call multiple times — resolves immediately on subsequent calls.
+ * No Firebase Auth required; identity is established via username+PIN hash.
  */
 async function initFirebase() {
-  if (_uid) return;
-  firebase.initializeApp(_FIREBASE_CONFIG);
-  const cred = await firebase.auth().signInAnonymously();
-  _uid = cred.user.uid;
-  _db  = firebase.firestore();
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    firebase.initializeApp(_FIREBASE_CONFIG);
+    _db = firebase.firestore();
+  })();
+  return _initPromise;
 }
-
-/** Returns the current anonymous user uid, or null if not yet initialised. */
-function getUid() { return _uid; }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,18 +91,94 @@ function _genCode() {
 }
 
 function _gamesRef() { return _db.collection('games'); }
+function _usersRef() { return _db.collection('users'); }
+
+// ─── User identity ────────────────────────────────────────────────────────────
+
+/**
+ * Look up an existing user or create a new one.
+ *
+ * First-come-first-served username claim: the first player to register a
+ * given username (case-insensitive) owns it.  Subsequent logins with the
+ * same username must provide a matching userId (hash) to gain access.
+ *
+ * @param {string} username   Display name as entered (casing preserved)
+ * @param {string} userId     SHA-256(username.lower + ':' + pin + ':' + salt)
+ * @returns {Promise<{ ok: boolean, created?: boolean, displayName?: string, error?: string }>}
+ */
+async function lookupOrCreateUser(username, userId) {
+  if (!_db) throw new Error('initFirebase() not called');
+
+  const key  = username.toLowerCase();
+  const ref  = _usersRef().doc(key);
+  const snap = await ref.get();
+
+  if (!snap.exists) {
+    // New username — claim it.
+    await ref.set({
+      userId,
+      displayName: username,
+      games:       [],
+      createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return { ok: true, created: true, displayName: username };
+  }
+
+  const data = snap.data();
+  if (data.userId !== userId) return { ok: false, error: 'incorrect_pin' };
+  return { ok: true, created: false, displayName: data.displayName };
+}
+
+/**
+ * Return the stored game list for a user (newest-first).
+ * Returns [] if the user document doesn't exist or has no games yet.
+ */
+async function getUserGames(username) {
+  if (!_db) throw new Error('initFirebase() not called');
+  const snap = await _usersRef().doc(username.toLowerCase()).get();
+  if (!snap.exists) return [];
+  return snap.data().games || [];
+}
+
+/**
+ * Add (or update) a game entry in the user's Firestore game list.
+ * Deduplicates by code; keeps newest-first; caps at 50 entries.
+ * userId must be included in the update to satisfy the Firestore security rule.
+ *
+ * @param {string} username
+ * @param {string} userId
+ * @param {{ code: string, player: number, seed: number }} game
+ */
+async function addGameToUser(username, userId, game) {
+  if (!_db) throw new Error('initFirebase() not called');
+
+  const ref  = _usersRef().doc(username.toLowerCase());
+  const snap = await ref.get();
+  if (!snap.exists) return;
+
+  const games    = snap.data().games || [];
+  const filtered = games.filter(g => g.code !== game.code);
+  filtered.unshift(game);   // newest first
+
+  await ref.update({
+    userId,                          // echoed to satisfy Firestore update rule
+    games: filtered.slice(0, 50),
+  });
+}
 
 // ─── Game CRUD ────────────────────────────────────────────────────────────────
 
 /**
  * Create a new game document and return its code.
- * Retries until a code that isn't already in use is found.
+ * Retries with a new code if a collision is found.
  *
- * @param {number} seed          PRNG seed (from createGame() in game.js)
- * @param {number} firstPlayer   0 or 1 (from state.firstPlayer after createGame())
+ * @param {number} seed
+ * @param {number} firstPlayer   0 or 1
+ * @param {string} playerName    Display name shown to opponent
+ * @param {string} userId        Hash identity of player 0
  * @returns {Promise<{ code: string }>}
  */
-async function createOnlineGame(seed, firstPlayer, playerName) {
+async function createOnlineGame(seed, firstPlayer, playerName, userId) {
   if (!_db) throw new Error('initFirebase() not called');
 
   let code, ref, snap;
@@ -91,7 +190,7 @@ async function createOnlineGame(seed, firstPlayer, playerName) {
 
   await ref.set({
     status:      'waiting',
-    player0uid:  _uid,
+    player0uid:  userId || '',
     player0name: playerName || '',
     player1uid:  null,
     player1name: '',
@@ -108,23 +207,25 @@ async function createOnlineGame(seed, firstPlayer, playerName) {
 
 /**
  * Join an existing game as player 1.
- * @param   {string} code  6-letter game code (case-insensitive)
+ * @param   {string} code
+ * @param   {string} playerName
+ * @param   {string} userId     Hash identity of player 1
  * @returns {Promise<{ seed: number, firstPlayer: number }|null>}
- *          null if the game is not found, already full, or not waiting.
+ *          null if the game is not found, already full, or not in 'waiting' status.
  */
-async function joinOnlineGame(code, playerName) {
+async function joinOnlineGame(code, playerName, userId) {
   if (!_db) throw new Error('initFirebase() not called');
 
   const ref  = _gamesRef().doc(code.toUpperCase().trim());
   const snap = await ref.get();
-  if (!snap.exists)              return null;
+  if (!snap.exists)           return null;
 
   const d = snap.data();
-  if (d.status !== 'waiting')    return null;
-  if (d.player1uid !== null)     return null;
+  if (d.status !== 'waiting') return null;
+  if (d.player1uid !== null)  return null;
 
   await ref.update({
-    player1uid:  _uid,
+    player1uid:  userId || '',
     player1name: playerName || '',
     status:      'active',
     updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
@@ -133,22 +234,17 @@ async function joinOnlineGame(code, playerName) {
   return { seed: d.seed, firstPlayer: d.firstPlayer };
 }
 
-/**
- * Subscribe to realtime updates for a game.
- * callback(data) fires immediately with the current doc and on every change.
- * @returns {function} unsubscribe — call to stop listening.
- */
 // ─── State serialisation ──────────────────────────────────────────────────────
 //
 // Firestore does not support nested arrays.  GameState has two:
-//   board  — Array[6][6]         → stored as a flat 36-element array
+//   board  — Array[6][6]          → stored as a flat 36-element array
 //   bags   — [string[], string[]] → stored as { p0: [...], p1: [...] }
 
 function _serializeState(state) {
   return {
     ...state,
-    board: state.board.flat(),                      // 2-D → 1-D (36 cells)
-    bags:  { p0: state.bags[0], p1: state.bags[1] }, // array-of-arrays → object
+    board: state.board.flat(),
+    bags:  { p0: state.bags[0], p1: state.bags[1] },
   };
 }
 
@@ -183,11 +279,9 @@ function listenToGame(code, callback) {
 
 /**
  * Write the current game state to Firestore after a move or setup placement.
- * Serialises nested arrays before writing.
- * @param {string}      code   Game code
- * @param {object}      state  Current GameState (post-move)
- * @param {object|null} move   The move that produced this state, or null for
- *                             setup-phase placements (which don't animate).
+ * @param {string}      code
+ * @param {object}      state   Current GameState (post-move)
+ * @param {object|null} move    Move that produced this state; null for setup steps
  */
 async function writeGameState(code, state, move) {
   if (!_db) throw new Error('initFirebase() not called');
