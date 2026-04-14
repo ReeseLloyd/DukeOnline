@@ -957,6 +957,13 @@ function updateUI() {
   const msgEl    = document.getElementById('status-msg');
   const drawBtn  = document.getElementById('draw-btn');
 
+  // Favicon + tab title alert: online only, active phase, your turn, nothing staged
+  if (_onlineMode) {
+    _setFaviconAlert(
+      state.phase === 'active' && _isMyTurn() && _pendingMove === null
+    );
+  }
+
   const resignBtn = document.getElementById('resign-btn');
 
   if (state.phase === 'gameover') {
@@ -1488,18 +1495,46 @@ function startNewGame(mode, depth) {
 }
 
 // ─── Favicon ──────────────────────────────────────────────────────────────────
+// Two variants pre-rendered at boot; _setFaviconAlert() swaps between them.
+// "Your turn" variant adds a vivid purple dot with a white halo in the top-right
+// corner — high contrast against the cream tile background for all vision types.
 
-(function () {
-  const sz = 128;
-  const fc = document.createElement('canvas');
+const _faviconLink = document.createElement('link');
+_faviconLink.rel  = 'icon';
+_faviconLink.type = 'image/png';
+document.head.appendChild(_faviconLink);
+
+const _faviconNormal = (function () {
+  const sz = 128, fc = document.createElement('canvas');
   fc.width = sz; fc.height = sz;
   drawTile(fc.getContext('2d'), 0, 0, sz, 'duke', 0, 0);
-  const link = document.createElement('link');
-  link.rel  = 'icon';
-  link.type = 'image/png';
-  link.href = fc.toDataURL('image/png');
-  document.head.appendChild(link);
+  return fc.toDataURL('image/png');
 }());
+
+const _faviconYourTurn = (function () {
+  const sz = 128, fc = document.createElement('canvas');
+  fc.width = sz; fc.height = sz;
+  const fCtx = fc.getContext('2d');
+  drawTile(fCtx, 0, 0, sz, 'duke', 0, 0);
+  // White halo — separates dot from any tile background colour
+  fCtx.beginPath();
+  fCtx.arc(96, 32, 32, 0, Math.PI * 2);
+  fCtx.fillStyle = '#ffffff';
+  fCtx.fill();
+  // Purple dot — matches game colour theme, colourblind-safe
+  fCtx.beginPath();
+  fCtx.arc(96, 32, 26, 0, Math.PI * 2);
+  fCtx.fillStyle = '#8020d8';
+  fCtx.fill();
+  return fc.toDataURL('image/png');
+}());
+
+_faviconLink.href = _faviconNormal;   // initial state
+
+function _setFaviconAlert(active) {
+  _faviconLink.href    = active ? _faviconYourTurn : _faviconNormal;
+  document.title       = active ? 'Your Turn \u2014 The Duke' : 'The Duke';
+}
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -1514,6 +1549,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.13.04</div>
+<div class="version">2026.04.13.05</div>
 </body>
 </html>
