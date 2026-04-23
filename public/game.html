@@ -685,10 +685,13 @@ function _isViewingHistory() {
 }
 
 /** Returns the state to display — historical when browsing, live otherwise.
- *  During animations (animating===true) the animation code manages `state`
- *  directly, so we return `state` unchanged to let it work normally. */
+ *  We always return the global `state` when:
+ *   - an animation is running (animation code manages `state` directly)
+ *   - a move is staged pending confirmation (_pendingMove !== null) — the
+ *     staged postState lives in `state` but hasn't been pushed to history yet
+ *   - a staging animation is in progress (_stagingAnimation) */
 function _displayState() {
-  if (animating) return state;
+  if (animating || _stagingAnimation || _pendingMove !== null) return state;
   return _history.length > 0 ? _history[_viewIndex].state : state;
 }
 
@@ -698,6 +701,7 @@ function _navigateTo(idx, animate) {
 
   const prevIdx  = _viewIndex;
   _viewIndex     = clamped;
+  document.getElementById('flip-preview').hidden = true;
   _renderTimeline();
 
   // Play the quick two-phase animation when stepping forward exactly one turn
@@ -1177,7 +1181,7 @@ function resetUI() {
 }
 
 function _showFlipPreview(col, row, hint) {
-  const cell = state.board[row]?.[col];
+  const cell = _displayState().board[row]?.[col];
   if (!cell) { document.getElementById('flip-preview').hidden = true; return; }
 
   const flipSide = 1 - cell.side;
@@ -1383,7 +1387,6 @@ function updateUI() {
     document.getElementById('cancel-btn').hidden          = true;
     document.getElementById('pending-controls').hidden    = true;
     document.getElementById('postgame-controls').hidden   = true;
-    document.getElementById('flip-preview').hidden        = true;
     document.getElementById('draw-preview').hidden        = true;
     document.getElementById('thinking').textContent       = '';
     document.getElementById('resign-btn').hidden          = true;
@@ -1584,7 +1587,12 @@ canvas.addEventListener('mousemove', function (evt) {
 });
 
 function handleClick(col, row) {
-  if (_isViewingHistory()) return;   // board is read-only while browsing history
+  if (_isViewingHistory()) {
+    // Board is read-only while browsing history, but allow tile inspection.
+    _showFlipPreview(col, row, 'Reverse side');
+    render(); updateUI();
+    return;
+  }
 
   // ── Setup phase ─────────────────────────────────────────────────────────────
   if (state.phase === 'setup') {
@@ -2123,6 +2131,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.22.01</div>
+<div class="version">2026.04.22.02</div>
 </body>
 </html>
