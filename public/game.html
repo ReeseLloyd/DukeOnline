@@ -443,8 +443,11 @@
       min-width: 36px;
     }
 
-    /* Desktop: timeline sits to the left of the board */
-    @media (min-width: 700px) {
+    /* Desktop: timeline left of board, board stays centered in the viewport.
+       An invisible ::after spacer mirrors the timeline width so the board-column
+       sits exactly in the middle of the three-item flex group. resizeCanvas()
+       subtracts both sidebar widths so the canvas is sized to fit. */
+    @media (min-width: 740px) {
       #main-area {
         flex-direction: row;
         align-items: flex-start;
@@ -461,6 +464,16 @@
         position: sticky;
         top: 12px;
         align-self: flex-start;
+      }
+
+      /* Right-side phantom spacer — same width as the timeline.
+         Together with justify-content: center this keeps the board centered. */
+      #main-area::after {
+        content: '';
+        display: block;
+        width: 210px;
+        flex-shrink: 0;
+        pointer-events: none;
       }
 
       #timeline-list {
@@ -778,8 +791,12 @@ const ctx    = canvas.getContext('2d');
 let   cellSz = 100;
 
 function resizeCanvas() {
+  // On wide viewports the timeline (210px) + phantom spacer (210px) + their
+  // gaps (2×16px) flank the board. Subtract both sides so the canvas is sized
+  // to fit and the board stays centered between them.
+  const sidePx = window.innerWidth >= 740 ? (210 + 16) * 2 : 0;
   const avail = Math.min(
-    window.innerWidth  - 32,
+    window.innerWidth  - 32 - sidePx,
     window.innerHeight - 270,   // room for header + opponent name + status + bag row + controls
     560
   );
@@ -2131,6 +2148,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.22.02</div>
+<div class="version">2026.04.22.03</div>
 </body>
 </html>
