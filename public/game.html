@@ -361,6 +361,112 @@
       opacity: 0.55;
     }
     #bag-close:hover { opacity: 1; background: none; }
+
+    /* ── Main play area ─────────────────────────────────────────────────────── */
+
+    #main-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    #board-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Timeline ───────────────────────────────────────────────────────────── */
+
+    #timeline {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(122,80,160,0.35);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .timeline-header {
+      font-size: 0.70rem;
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+      opacity: 0.50;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(122,80,160,0.30);
+      margin-bottom: 2px;
+    }
+
+    #timeline-list {
+      list-style: none;
+      overflow-y: auto;
+      max-height: 110px;
+      padding: 0;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(122,80,160,0.5) transparent;
+    }
+
+    #timeline-list li {
+      font-size: 0.75rem;
+      font-family: 'Courier New', Courier, monospace;
+      padding: 2px 5px;
+      border-radius: 3px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0.70;
+      line-height: 1.5;
+    }
+
+    #timeline-list li:hover                 { background: rgba(255,255,255,0.08); opacity: 1; }
+    #timeline-list li.timeline-current      { background: rgba(122,80,160,0.32); color: #c8a020; opacity: 1; }
+    #timeline-list li.timeline-live         { opacity: 1; }
+
+    #timeline-nav {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      margin-top: 2px;
+    }
+
+    #timeline-nav button {
+      padding: 3px 10px;
+      font-size: 0.80rem;
+      font-family: 'Courier New', Courier, monospace;
+      min-width: 36px;
+    }
+
+    /* Desktop: timeline sits to the left of the board */
+    @media (min-width: 700px) {
+      #main-area {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 16px;
+        width: 100%;
+      }
+
+      #timeline {
+        width: 210px;
+        max-width: 210px;
+        flex-shrink: 0;
+        order: -1;
+        position: sticky;
+        top: 12px;
+        align-self: flex-start;
+      }
+
+      #timeline-list {
+        max-height: 420px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -378,47 +484,62 @@
 
 <div id="opponent-name" hidden></div>
 
-<div id="board-wrap">
-  <canvas id="board"></canvas>
-</div>
+<div id="main-area">
+  <div id="board-column">
+    <div id="board-wrap">
+      <canvas id="board"></canvas>
+    </div>
 
-<div id="bag-row">
-  <button id="bag-btn-0">White's Bag</button>
-  <button id="bag-btn-1">Brown's Bag</button>
-</div>
+    <div id="bag-row">
+      <button id="bag-btn-0">White's Bag</button>
+      <button id="bag-btn-1">Brown's Bag</button>
+    </div>
 
-<div id="controls">
-  <button id="draw-btn" disabled>Draw from Bag</button>
-  <button id="cancel-btn" hidden>Cancel</button>
-</div>
+    <div id="controls">
+      <button id="draw-btn" disabled>Draw from Bag</button>
+      <button id="cancel-btn" hidden>Cancel</button>
+    </div>
 
-<div id="pending-controls" hidden>
-  <button id="undo-btn">Undo Move</button>
-  <button id="confirm-btn">Confirm Move</button>
-  <span id="pending-countdown"></span>
-</div>
+    <div id="pending-controls" hidden>
+      <button id="undo-btn">Undo Move</button>
+      <button id="confirm-btn">Confirm Move</button>
+      <span id="pending-countdown"></span>
+    </div>
 
-<div id="postgame-controls" hidden>
-  <button id="lobby-btn-post">Return to Lobby</button>
-</div>
+    <div id="postgame-controls" hidden>
+      <button id="lobby-btn-post">Return to Lobby</button>
+    </div>
 
-<div id="thinking"></div>
+    <div id="thinking"></div>
 
-<div id="flip-preview" hidden>
-  <canvas id="flip-tile-canvas" width="90" height="90"></canvas>
-  <div>
-    <div id="flip-tile-name"></div>
-    <div id="flip-tile-hint">Flip side (after moving)</div>
-  </div>
-</div>
+    <div id="flip-preview" hidden>
+      <canvas id="flip-tile-canvas" width="90" height="90"></canvas>
+      <div>
+        <div id="flip-tile-name"></div>
+        <div id="flip-tile-hint">Flip side (after moving)</div>
+      </div>
+    </div>
 
-<div id="draw-preview" hidden>
-  <canvas id="draw-tile-canvas" width="90" height="90"></canvas>
-  <div>
-    <div id="draw-tile-name"></div>
-    <div id="draw-tile-hint">Click a highlighted square to place it.</div>
-  </div>
-</div>
+    <div id="draw-preview" hidden>
+      <canvas id="draw-tile-canvas" width="90" height="90"></canvas>
+      <div>
+        <div id="draw-tile-name"></div>
+        <div id="draw-tile-hint">Click a highlighted square to place it.</div>
+      </div>
+    </div>
+  </div><!-- #board-column -->
+
+  <div id="timeline">
+    <div class="timeline-header">Timeline</div>
+    <ul id="timeline-list"></ul>
+    <div id="timeline-nav">
+      <button id="tl-start" title="Game start (H)">&#x25c0;&#x25c0;</button>
+      <button id="tl-prev"  title="Back one turn (J)">&#x25c0;</button>
+      <button id="tl-next"  title="Forward one turn (K)">&#x25b6;</button>
+      <button id="tl-end"   title="Live / end (L)">&#x25b6;&#x25b6;</button>
+    </div>
+  </div><!-- #timeline -->
+</div><!-- #main-area -->
 
 <!-- Mode selection overlay -->
 <div id="mode-overlay" class="overlay">
@@ -484,14 +605,167 @@ const CELL_DARK  = '#c9a87c';
 
 // Highlight fill/stroke per action type
 const HIGHLIGHTS = {
-  setup:      { fill: 'rgba(255,210,40,0.42)' },
-  selected:   { fill: 'rgba(255,200,0,0.20)', stroke: 'rgba(255,190,0,0.90)', lw: 3 },
-  move:       { fill: 'rgba(0,175,75,0.38)' },
-  strike:     { fill: 'rgba(210,30,30,0.44)' },
-  draw:       { fill: 'rgba(20,130,220,0.40)' },
-  'cmd-from': { fill: 'rgba(155,0,210,0.40)' },
-  'cmd-to':   { fill: 'rgba(220,115,0,0.44)' },
+  setup:      { fill: 'rgba(255,210,40,0.52)',  stroke: 'rgba(220,170,0,0.88)',   lw: 2 },
+  selected:   { fill: 'rgba(255,200,0,0.22)',   stroke: 'rgba(255,190,0,0.92)',   lw: 3 },
+  move:       { fill: 'rgba(0,185,80,0.52)',    stroke: 'rgba(0,160,60,0.88)',    lw: 2 },
+  strike:     { fill: 'rgba(215,30,30,0.58)',   stroke: 'rgba(200,15,15,0.90)',   lw: 2 },
+  draw:       { fill: 'rgba(20,140,230,0.52)',  stroke: 'rgba(10,115,215,0.88)',  lw: 2 },
+  'cmd-from': { fill: 'rgba(165,0,220,0.52)',   stroke: 'rgba(145,0,205,0.88)',   lw: 2 },
+  'cmd-to':   { fill: 'rgba(225,120,0,0.56)',   stroke: 'rgba(210,100,0,0.88)',   lw: 2 },
 };
+
+// ─── History / timeline ───────────────────────────────────────────────────────
+// Each entry: { state, label, move }
+// _history[0] = initial game state (move: null)
+// _viewIndex  = index we are currently viewing
+// When _viewIndex === _history.length - 1 we are "live"
+
+let _history   = [];
+let _viewIndex = 0;
+
+function _coordStr(col, row) { return 'abcdef'[col] + (row + 1); }
+
+function _buildMoveLabel(preState, move) {
+  const p  = preState.currentPlayer;
+  const pw = p === 0 ? 'W' : 'B';
+  const tn = t => TILE_DISPLAY_NAMES[t] ?? t;
+
+  if (move.action === 'setup') {
+    const piece  = move.subStep === 0 ? 'Duke' : 'Footman';
+    const posStr = move.pos ? _coordStr(move.pos[0], move.pos[1]) : '?';
+    return 'Setup \u2014 ' + pw + ': ' + piece + ' \u2192 ' + posStr;
+  }
+
+  const n = preState.turn + 1;
+
+  if (move.action === 'draw') {
+    const type = preState.bags[p][0];
+    return n + ' \u2014 ' + pw + ': draws ' + tn(type) + ' \u2192 ' + _coordStr(move.pos[0], move.pos[1]);
+  }
+
+  if (move.action === 'move') {
+    const cell = preState.board[move.from[1]][move.from[0]];
+    const name = cell ? tn(cell.type) : '?';
+    return n + ' \u2014 ' + pw + ': ' + name + ' ' + _coordStr(move.from[0], move.from[1]) + ' \u2192 ' + _coordStr(move.to[0], move.to[1]);
+  }
+
+  if (move.action === 'strike') {
+    const cell = preState.board[move.from[1]][move.from[0]];
+    const name = cell ? tn(cell.type) : '?';
+    return n + ' \u2014 ' + pw + ': ' + name + ' ' + _coordStr(move.from[0], move.from[1]) + ' \xd7 ' + _coordStr(move.target[0], move.target[1]);
+  }
+
+  if (move.action === 'command') {
+    const cmdrCell = preState.board[move.commander[1]][move.commander[0]];
+    const cmdCell  = preState.board[move.from[1]][move.from[0]];
+    const cmdrName = cmdrCell ? tn(cmdrCell.type) : '?';
+    const cmdName  = cmdCell  ? tn(cmdCell.type)  : '?';
+    return n + ' \u2014 ' + pw + ': ' + cmdrName + ' cmd ' + cmdName + ' \u2192 ' + _coordStr(move.to[0], move.to[1]);
+  }
+
+  return n + ' \u2014 ' + pw + ': move';
+}
+
+function _initHistory(initialState) {
+  _history   = [{ state: initialState, label: 'Start', move: null }];
+  _viewIndex = 0;
+  _renderTimeline();
+}
+
+function _recordHistory(preState, postState, move) {
+  const label     = _buildMoveLabel(preState, move);
+  const wasAtLive = _viewIndex === _history.length - 1;
+  _history.push({ state: postState, label, move });
+  if (wasAtLive) _viewIndex = _history.length - 1;
+  _renderTimeline();
+}
+
+function _isViewingHistory() {
+  return _viewIndex < _history.length - 1;
+}
+
+/** Returns the state to display — historical when browsing, live otherwise.
+ *  During animations (animating===true) the animation code manages `state`
+ *  directly, so we return `state` unchanged to let it work normally. */
+function _displayState() {
+  if (animating) return state;
+  return _history.length > 0 ? _history[_viewIndex].state : state;
+}
+
+function _navigateTo(idx, animate) {
+  const clamped = Math.max(0, Math.min(_history.length - 1, idx));
+  if (clamped === _viewIndex) return;
+
+  const prevIdx  = _viewIndex;
+  _viewIndex     = clamped;
+  _renderTimeline();
+
+  // Play the quick two-phase animation when stepping forward exactly one turn
+  if (animate && clamped === prevIdx + 1 && _history[clamped].move) {
+    const entry   = _history[clamped];
+    const { from, to } = _getAnimPositions(entry.move);
+    const savedState   = state;
+    animating          = true;
+
+    state      = _history[prevIdx].state;
+    animOverlay = { phase: 0, from, to };
+    render();
+
+    setTimeout(function () {
+      state      = _history[clamped].state;
+      animOverlay = { phase: 1, from, to };
+      render();
+
+      setTimeout(function () {
+        state      = savedState;
+        animOverlay = null;
+        animating   = false;
+        render();
+        updateUI();
+      }, 320);
+    }, 380);
+  } else {
+    render();
+    updateUI();
+  }
+}
+
+function _returnToLive() { _navigateTo(_history.length - 1, false); }
+
+function _renderTimeline() {
+  const list = document.getElementById('timeline-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const liveIdx = _history.length - 1;
+  for (let i = 0; i < _history.length; i++) {
+    const li = document.createElement('li');
+    li.textContent   = _history[i].label;
+    li.dataset.index = i;
+    if (i === _viewIndex) li.classList.add('timeline-current');
+    if (i === liveIdx)    li.classList.add('timeline-live');
+    (function (idx) {
+      li.addEventListener('click', function () {
+        _navigateTo(idx, idx === _viewIndex + 1);
+      });
+    }(i));
+    list.appendChild(li);
+  }
+
+  const current = list.querySelector('.timeline-current');
+  if (current) current.scrollIntoView({ block: 'nearest' });
+
+  const atStart = _viewIndex === 0;
+  const atLive  = _viewIndex === liveIdx;
+  const s = document.getElementById('tl-start');
+  const p = document.getElementById('tl-prev');
+  const n = document.getElementById('tl-next');
+  const e = document.getElementById('tl-end');
+  if (s) s.disabled = atStart;
+  if (p) p.disabled = atStart;
+  if (n) n.disabled = atLive;
+  if (e) e.disabled = atLive;
+}
 
 // ─── Canvas ───────────────────────────────────────────────────────────────────
 
@@ -700,6 +974,8 @@ function _onGameSnapshot(data) {
     // Opponent made an active move — animate it.
     const preState = state;
     playMoveAnimation(preState, newState, lastMove, function () {
+      _recordHistory(preState, newState, lastMove);
+      if (_isViewingHistory()) _returnToLive();   // auto-return: it's now your turn
       state      = newState;
       legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
       _checkRestoreDrawMode();
@@ -708,7 +984,10 @@ function _onGameSnapshot(data) {
     });
   } else {
     // Setup placement — instant snap.
+    const preState = state;
     state      = newState;
+    _recordHistory(preState, newState, { action: 'setup', pos: null, subStep: -1 });
+    if (_isViewingHistory()) _returnToLive();
     legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
     _checkRestoreDrawMode();
     render();
@@ -736,6 +1015,7 @@ async function _initOnlineGame() {
   // Both players reconstruct identical state from the shared seed.
   state      = createGame({ seed: _onlineSeed });
   legalMoves = [];
+  _initHistory(state);
 
   if (_myPlayerIndex === 0) {
     // Show waiting overlay with the game code.
@@ -766,6 +1046,7 @@ function _applyAIMove(move) {
   const preState  = state;
   const postState = applyMove(preState, move);
   playMoveAnimation(preState, postState, move, function () {
+    _recordHistory(preState, postState, move);
     legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
     render();
     updateUI();
@@ -812,9 +1093,11 @@ function triggerAISetup() {
     const info2 = getSetupInfo(state);
     if (!info2 || info2.player !== 1) return;
 
-    const t   = info2.targets;
-    const pos = t[Math.floor(Math.random() * t.length)];
+    const t        = info2.targets;
+    const pos      = t[Math.floor(Math.random() * t.length)];
+    const preState = state;
     state = applySetupPlacement(state, pos[0], pos[1]);
+    _recordHistory(preState, state, { action: 'setup', pos, subStep: info2.subStep });
 
     if (state.phase === 'active') {
       legalMoves = getLegalMoves(state);
@@ -935,6 +1218,7 @@ function cellKey(c, r) { return `${c},${r}`; }
 
 function computeHighlights() {
   const h = new Map();
+  if (_isViewingHistory()) return h;   // read-only while browsing history
 
   // Setup phase: highlight valid placement squares for the current step
   if (state.phase === 'setup') {
@@ -987,6 +1271,7 @@ function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const hi      = computeHighlights();
   const flipped = _boardFlipped();
+  const ds      = _displayState();   // historical or live board state
 
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
@@ -1001,7 +1286,7 @@ function render() {
 
       // Tiles facing away from the viewing player are rotated 180°.
       // Normal view: Player 1's tiles rotate. Flipped view: Player 0's tiles rotate.
-      const cell = state.board[r][c];
+      const cell = ds.board[r][c];
       if (cell) {
         const shouldRotate = flipped ? cell.player === 0 : cell.player === 1;
         if (shouldRotate) {
@@ -1051,13 +1336,10 @@ function render() {
   }
 
   // Guard highlight — red ring on the threatened Duke, drawn above all other overlays.
-  // Guard is a "you're in danger — act" signal, so it only shows when a local human player
-  // is the one to move.  This suppresses flashes in all modes:
-  //   hotseat  — both players share the screen, so always shown
-  //   AI       — only when the human (player 0) is to move, not during the AI's turn
-  //   online   — only when it's this client's turn, not while waiting for the opponent
+  // Suppressed during history browsing (guard is a live-game signal only).
   // Also suppressed during animation and while a move is staged (prevents hunting).
-  if (state.phase === 'active' && !_stagingAnimation && _pendingMove === null && isDukeInGuard(state)) {
+  if (!_isViewingHistory() &&
+      state.phase === 'active' && !_stagingAnimation && _pendingMove === null && isDukeInGuard(state)) {
     const gp = state.currentPlayer;
     outer: for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 6; c++) {
@@ -1076,8 +1358,9 @@ function render() {
     }
   }
 
-  // Board border — gold when a move is staged to signal "preview mode"
-  ctx.strokeStyle = _pendingMove ? '#c8a020' : '#5a3a80';
+  // Board border — gold when a move is staged, muted purple when browsing history
+  const browsing = _isViewingHistory();
+  ctx.strokeStyle = _pendingMove ? '#c8a020' : browsing ? '#3a2560' : '#5a3a80';
   ctx.lineWidth   = _pendingMove ? 3 : 2;
   ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 }
@@ -1088,6 +1371,25 @@ function updateUI() {
   const playerEl = document.getElementById('status-player');
   const msgEl    = document.getElementById('status-msg');
   const drawBtn  = document.getElementById('draw-btn');
+
+  // History browsing: show which turn we're viewing and lock all game controls.
+  if (_isViewingHistory()) {
+    const idx   = _viewIndex;
+    const total = _history.length - 1;
+    playerEl.textContent  = 'Viewing turn ' + idx + ' of ' + total;
+    playerEl.style.color  = '#c8a020';
+    msgEl.textContent     = _history[idx].label + ' \u2014 press L or \u25b6\u25b6 to return to live';
+    drawBtn.disabled      = true;
+    document.getElementById('cancel-btn').hidden          = true;
+    document.getElementById('pending-controls').hidden    = true;
+    document.getElementById('postgame-controls').hidden   = true;
+    document.getElementById('flip-preview').hidden        = true;
+    document.getElementById('draw-preview').hidden        = true;
+    document.getElementById('thinking').textContent       = '';
+    document.getElementById('resign-btn').hidden          = true;
+    _renderTimeline();
+    return;
+  }
 
   // Opponent name (above board)
   const oppNameEl = document.getElementById('opponent-name');
@@ -1260,7 +1562,7 @@ canvas.addEventListener('click', function (evt) {
 });
 
 canvas.addEventListener('mousemove', function (evt) {
-  if (state.phase === 'gameover' || animating) { canvas.style.cursor = 'default'; return; }
+  if (_isViewingHistory() || state.phase === 'gameover' || animating) { canvas.style.cursor = 'default'; return; }
   const rect   = canvas.getBoundingClientRect();
   const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -1282,6 +1584,8 @@ canvas.addEventListener('mousemove', function (evt) {
 });
 
 function handleClick(col, row) {
+  if (_isViewingHistory()) return;   // board is read-only while browsing history
+
   // ── Setup phase ─────────────────────────────────────────────────────────────
   if (state.phase === 'setup') {
     if (_pendingMove !== null) return;  // staging: wait for confirm or undo
@@ -1295,7 +1599,7 @@ function handleClick(col, row) {
     if (isValid) {
       _pendingPreState = state;
       state = applySetupPlacement(state, col, row);
-      _pendingMove = { action: 'setup' };
+      _pendingMove = { action: 'setup', pos: [col, row], subStep: info.subStep };
       document.getElementById('pending-controls').hidden = false;
       _startPendingTimer();
       render(); updateUI();
@@ -1430,13 +1734,15 @@ function commitMove(move) {
 function submitTurn() {
   _clearPendingTimer();
   _clearDrawCommitted();
-  const move       = _pendingMove;
+  const move     = _pendingMove;
+  const preState = _pendingPreState;   // save before clearing
   _pendingMove     = null;
   _pendingPreState = null;
   document.getElementById('pending-controls').hidden = true;
 
   if (move.action === 'setup') {
-    // Setup placement confirmed — sync and hand off to AI / next step.
+    // Setup placement confirmed — record history, sync and hand off to AI / next step.
+    _recordHistory(preState, state, move);
     if (_onlineMode) {
       _syncToFirestore(null).catch(console.error);
       if (state.phase === 'active') legalMoves = getLegalMoves(state);
@@ -1453,6 +1759,7 @@ function submitTurn() {
   }
 
   // Active-phase move confirmed.
+  _recordHistory(preState, state, move);
   legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
   render(); updateUI();
   if (_onlineMode) _syncToFirestore(move).catch(console.error);
@@ -1557,6 +1864,7 @@ function _resetForNewGame() {
   document.getElementById('thinking').textContent = '';
   state = createGame();
   legalMoves = [];
+  _initHistory(state);
   resetUI();
   render();
   document.getElementById('difficulty-section').hidden = true;
@@ -1649,6 +1957,7 @@ function startNewGame(mode, depth) {
   document.getElementById('thinking').textContent = '';
   state      = createGame();
   legalMoves = [];
+  _initHistory(state);
   resetUI();
   if (mode === 'ai') {
     initWorker();
@@ -1781,6 +2090,26 @@ function _openBagPopup(playerIndex) {
   document.getElementById('bag-overlay').hidden = false;
 }
 
+// ─── Timeline nav buttons ─────────────────────────────────────────────────────
+
+document.getElementById('tl-start').addEventListener('click', function () { _navigateTo(0, false); });
+document.getElementById('tl-prev') .addEventListener('click', function () { _navigateTo(_viewIndex - 1, false); });
+document.getElementById('tl-next') .addEventListener('click', function () { _navigateTo(_viewIndex + 1, true); });
+document.getElementById('tl-end')  .addEventListener('click', function () { _returnToLive(); });
+
+// ─── History keyboard shortcuts (H / J / K / L) ───────────────────────────────
+
+document.addEventListener('keydown', function (evt) {
+  if (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA') return;
+  if (evt.ctrlKey || evt.metaKey || evt.altKey) return;
+  switch (evt.key) {
+    case 'H': case 'h': _navigateTo(0, false);              break;
+    case 'J': case 'j': _navigateTo(_viewIndex - 1, false); break;
+    case 'K': case 'k': _navigateTo(_viewIndex + 1, true);  break;
+    case 'L': case 'l': _returnToLive();                     break;
+  }
+});
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 resizeCanvas();   // sizes canvas and calls render()
@@ -1794,6 +2123,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.16.02</div>
+<div class="version">2026.04.22.01</div>
 </body>
 </html>
