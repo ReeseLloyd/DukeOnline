@@ -4,6 +4,28 @@ A living document. Priorities and scope will shift as the project evolves — th
 
 ---
 
+## Build Sequence
+
+Online experience before gameplay expansion — with one exception.
+
+The base game is already complete and fun. The more important architectural reason to go online-experience-first is that **auth is load-bearing**: the current PIN system is a dead end. Every feature that follows (persistent history, ratings, match records, notifications) requires real account ownership underneath it. Doing the auth upgrade late means migrating data and retrofitting every feature that touches user identity.
+
+Gameplay expansions are also more invasive to the engine than they appear. Board size variants require auditing every hardcoded `6` in rendering, move generation, setup logic, and Firestore serialization. Terrain adds a new state layer. Bag customization changes game initialization and the document shape. Those changes get riskier as more depends on them — better to tackle them after the online layer is stable and tested with real players, who will tell you which variants they actually want.
+
+**The exception:** Jarl and Centurion come first. They require new action types in the game engine, and the engine is simplest to change now, before the online layer adds more complexity.
+
+### Sequence
+
+1. **Jarl + Centurion** — engine work; do it while the engine is clean
+2. **Auth upgrade** — PIN → Firebase Email Magic Link; unlocks everything that follows
+3. **Persistent game history + rematch** — builds on real account ownership
+4. **Time controls + async / correspondence mode**
+5. **Ratings + leaderboards**
+6. **Gameplay expansion** — bag customization, board size variants, terrain
+7. **Custom tiles** — stretch goal; complex to build and moderate
+
+---
+
 ## Where We Are
 
 The core engine is complete: full base-game rules, all 15 standard tiles, online multiplayer via Firebase, a client-side AI opponent, hotseat mode, and a game timeline with move history. The foundation is solid enough to start layering on the features below.
