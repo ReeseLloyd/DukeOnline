@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tile Draft Validation — Jarl & Centurion</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #eae8e3;
+  padding: 28px 24px 60px;
+  color: #1a1208;
+}
+h1 { font-size: 1.4rem; margin-bottom: 4px; }
+.subtitle {
+  font-size: 0.82rem; color: #666; margin-bottom: 24px; max-width: 680px;
+  line-height: 1.5;
+}
+
+h2 {
+  font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 32px 0 12px; padding-bottom: 6px;
+  border-bottom: 2px solid currentColor;
+}
+h2.jarl      { color: #2b3a4d; border-color: #3e4a5c; }
+h2.centurion { color: #5a2a14; border-color: #6a3420; }
+
+/* Legend ------------------------------------------------------------------ */
+.legend {
+  background: white;
+  border: 1px solid #d0ccc4;
+  border-radius: 8px;
+  padding: 14px 16px 12px;
+  margin-bottom: 28px;
+}
+.legend h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+.legend-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.legend-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.legend-label {
+  font-size: 0.60rem;
+  text-align: center;
+  color: #444;
+  max-width: 58px;
+  line-height: 1.3;
+}
+
+/* Tile grid --------------------------------------------------------------- */
+.tile-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.tile-card {
+  background: white;
+  border: 1px solid #d0ccc4;
+  border-radius: 7px;
+  padding: 10px;
+}
+.tile-card-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin-bottom: 7px;
+}
+.tile-card-sides {
+  display: flex;
+  gap: 5px;
+}
+.tile-side-wrap { text-align: center; }
+.tile-side-label {
+  font-size: 0.58rem;
+  color: #888;
+  margin-top: 4px;
+}
+.tile-card-meta {
+  font-size: 0.60rem;
+  color: #999;
+  text-align: center;
+  margin-top: 5px;
+}
+</style>
+</head>
+<body>
+
+<h1>Tile Draft Validation — Jarl &amp; Centurion</h1>
+<p class="subtitle">
+  Draft patterns extracted from the print-and-play PDFs. Verify each tile against the
+  printed sheet. Annotations in the source draft files (NC?, verify, hammer?, smash?)
+  indicate cells requiring physical confirmation before encoding into tiles.js.
+</p>
+
+<div class="legend">
+  <h3>Icon key</h3>
+  <div class="legend-grid" id="legend-grid"></div>
+</div>
+
+<h2 class="jarl">Jarl Tiles</h2>
+<div class="tile-grid" id="jarl-grid"></div>
+
+<h2 class="centurion">Centurion Tiles</h2>
+<div class="tile-grid" id="centurion-grid"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TILE DATA  (inlined from draft files)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const JARL_TILES = {
+  jarl: {
+    count: 1, startOnBoard: 1,
+    sides: [
+      [ { type:'moveNC',sq:[-1,1]}, {type:'move',sq:[0,1]}, {type:'moveNC',sq:[1,1]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'jump',sq:[0,2]}, {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]},
+        {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]}, {type:'jump',sq:[0,-2]} ],
+    ],
+  },
+  freeman: {
+    count: 3, startOnBoard: 2,
+    sides: [
+      [ {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'slideNC',dir:[0,1]}, {type:'move',sq:[-1,1]}, {type:'move',sq:[1,1]},
+        {type:'move',sq:[-1,-1]}, {type:'move',sq:[1,-1]} ],
+    ],
+  },
+  spearman: {
+    count: 3,
+    sides: [
+      [ {type:'jumpNC',sq:[-2,2]}, {type:'jumpNC',sq:[2,2]},
+        {type:'strike',sq:[-1,1]}, {type:'strike',sq:[1,1]},
+        {type:'moveNC',sq:[-1,0]}, {type:'moveNC',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'slide',dir:[0,1]}, {type:'moveNC',sq:[-1,0]}, {type:'moveNC',sq:[1,0]},
+        {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  chieftain: {
+    count: 1,
+    sides: [
+      [ {type:'move',sq:[0,1]}, {type:'move',sq:[0,-1]},
+        {type:'command',sq:[-1,1]}, {type:'command',sq:[1,1]},
+        {type:'command',sq:[-1,0]}, {type:'command',sq:[1,0]},
+        {type:'command',sq:[-1,-1]}, {type:'command',sq:[1,-1]} ],
+      [ {type:'move',sq:[-1,1]}, {type:'move',sq:[0,1]}, {type:'move',sq:[1,1]},
+        {type:'move',sq:[-1,-1]}, {type:'move',sq:[1,-1]},
+        {type:'command',sq:[-1,0]}, {type:'command',sq:[1,0]} ],
+    ],
+  },
+  vala: {
+    count: 1,
+    sides: [
+      [ {type:'moveNC',sq:[0,1]}, {type:'moveNC',sq:[-1,0]}, {type:'moveNC',sq:[1,0]},
+        {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]}, {type:'jump',sq:[0,-2]} ],
+      [ {type:'jump',sq:[0,2]}, {type:'jump',sq:[-1,1]}, {type:'jump',sq:[1,1]},
+        {type:'moveNC',sq:[-1,0]}, {type:'moveNC',sq:[1,0]}, {type:'moveNC',sq:[0,-1]} ],
+    ],
+  },
+  berserker: {
+    count: 1,
+    sides: [
+      [ {type:'strike',sq:[-2,2]}, {type:'strike',sq:[0,2]}, {type:'strike',sq:[2,2]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]} ],
+      [ {type:'move',sq:[-1,1]}, {type:'move',sq:[0,1]}, {type:'move',sq:[1,1]},
+        {type:'strike',sq:[-1,0]}, {type:'strike',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  shieldMaiden: {
+    count: 1, noStartingSide: true,
+    sides: [
+      [ {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'jump',sq:[-1,2]}, {type:'jump',sq:[1,2]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  archer: {
+    count: 1,
+    sides: [
+      [ {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]},
+        {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]}, {type:'jump',sq:[0,-2]} ],
+      [ {type:'strike',sq:[0,2]}, {type:'strike',sq:[-1,1]}, {type:'strike',sq:[1,1]},
+        {type:'move',sq:[0,1]}, {type:'move',sq:[-1,-1]}, {type:'move',sq:[1,-1]} ],
+    ],
+  },
+  huscarl: {
+    count: 1, noStartingSide: true,
+    sides: [
+      [ {type:'move',sq:[-1,1]}, {type:'move',sq:[0,1]}, {type:'move',sq:[1,1]},
+        {type:'jump',sq:[0,2]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'slide',dir:[0,1]}, {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]},
+        {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  warlord: {
+    count: 1,
+    sides: [
+      [ {type:'move',sq:[-1,1]}, {type:'move',sq:[0,1]}, {type:'move',sq:[1,1]},
+        {type:'command',sq:[-1,0]}, {type:'command',sq:[1,0]},
+        {type:'move',sq:[-1,-1]}, {type:'move',sq:[1,-1]} ],
+      [ {type:'jump',sq:[-2,2]}, {type:'jump',sq:[2,2]}, {type:'move',sq:[0,1]},
+        {type:'command',sq:[-1,0]}, {type:'command',sq:[1,0]},
+        {type:'jump',sq:[-2,-2]}, {type:'jump',sq:[2,-2]} ],
+    ],
+  },
+  gothi: {
+    count: 1,
+    sides: [
+      [ {type:'jump',sq:[0,2]}, {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]},
+        {type:'jump',sq:[0,-2]}, {type:'moveNC',sq:[0,1]} ],
+      [ {type:'jump',sq:[-1,2]}, {type:'jump',sq:[1,2]},
+        {type:'jump',sq:[-2,1]}, {type:'jump',sq:[2,1]}, {type:'moveNC',sq:[0,-1]} ],
+    ],
+  },
+  axeWarrior: {
+    count: 1,
+    sides: [
+      [ {type:'move',sq:[-1,2]}, {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]},
+        {type:'strike',sq:[2,2]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'strike',sq:[0,2]}, {type:'move',sq:[-1,1]}, {type:'move',sq:[1,1]},
+        {type:'move',sq:[0,1]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  swordWarrior: {
+    count: 1,
+    sides: [
+      [ {type:'jump',sq:[0,2]}, {type:'move',sq:[0,1]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'strike',sq:[-1,1]}, {type:'strike',sq:[1,1]}, {type:'move',sq:[0,1]},
+        {type:'slide',dir:[-1,0]}, {type:'slide',dir:[1,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  huntsman: {
+    count: 1, noStartingSide: true,
+    sides: [
+      [ {type:'strike',sq:[0,2]}, {type:'moveNC',sq:[-1,1]}, {type:'moveNC',sq:[0,1]},
+        {type:'moveNC',sq:[1,1]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'slideNC',dir:[0,1]}, {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]},
+        {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  ulberht: {
+    count: 1,
+    sides: [
+      [ {type:'strike',sq:[-1,1]}, {type:'strike',sq:[0,1]}, {type:'strike',sq:[1,1]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'jump',sq:[0,2]}, {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]},
+        {type:'strike',sq:[-1,1]}, {type:'strike',sq:[1,1]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+};
+
+const CENTURION_TILES = {
+  centurion: {
+    count: 1, startOnBoard: 1,
+    sides: [
+      [ {type:'formation',sq:[-2,2]}, {type:'formation',sq:[2,2]},
+        {type:'smash',sq:[-1,1]}, {type:'smash',sq:[1,1]},
+        {type:'slideNC',dir:[-1,1]}, {type:'slideNC',dir:[1,1]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'formation',sq:[-1,1]}, {type:'formation',sq:[1,1]},
+        {type:'smash',sq:[-1,0]}, {type:'smash',sq:[1,0]},
+        {type:'slideNC',dir:[-1,1]}, {type:'slideNC',dir:[1,1]},
+        {type:'move',sq:[0,1]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  legionnaire: {
+    count: 6, startOnBoard: 2,
+    sides: [
+      [ {type:'strike',sq:[0,2]}, {type:'move',sq:[0,1]},
+        {type:'formation',sq:[1,1]},
+        {type:'slideNC',dir:[-1,1]}, {type:'slideNC',dir:[1,1]},
+        {type:'move',sq:[0,-1]} ],
+      [ {type:'ready'}, {type:'move',sq:[0,1]},
+        {type:'formation',sq:[1,1]},
+        {type:'slideNC',dir:[-1,1]}, {type:'slideNC',dir:[1,1]},
+        {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  onager: {
+    count: 1,
+    sides: [
+      [ {type:'moveNC',sq:[-1,2]}, {type:'moveNC',sq:[1,2]},
+        {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]},
+        {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'strike',sq:[-2,2]}, {type:'strike',sq:[0,2]}, {type:'strike',sq:[2,2]},
+        {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  hastati: {
+    count: 1,
+    sides: [
+      [ {type:'jumpNC',sq:[0,2]}, {type:'strike',sq:[-1,1]}, {type:'strike',sq:[1,1]},
+        {type:'formation',sq:[-1,0]}, {type:'formation',sq:[1,0]}, {type:'moveNC',sq:[0,-1]} ],
+      [ {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]},
+        {type:'move',sq:[0,1]}, {type:'formation',sq:[-1,0]}, {type:'moveNC',sq:[0,-1]} ],
+    ],
+  },
+  warDogs: {
+    count: 1, noStartingSide: true,
+    sides: [
+      [ {type:'smash',sq:[-1,1]}, {type:'smash',sq:[1,1]},
+        {type:'smash',sq:[-1,-1]}, {type:'smash',sq:[1,-1]} ],
+      [ {type:'slide',dir:[0,1]}, {type:'move',sq:[-1,0]},
+        {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  primusPilus: {
+    count: 1,
+    sides: [
+      [ {type:'strike',sq:[-2,2]}, {type:'strike',sq:[0,2]}, {type:'strike',sq:[2,2]},
+        {type:'formationSingle',sq:[-1,0]}, {type:'move',sq:[0,1]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'strike',sq:[-2,2]}, {type:'strike',sq:[2,2]},
+        {type:'formationSingle',sq:[1,0]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  optio: {
+    count: 1,
+    sides: [
+      [ {type:'formation',sq:[0,1]}, {type:'moveNC',sq:[0,1]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'jump',sq:[0,-2]} ],
+      [ {type:'formation',sq:[-1,0]}, {type:'move',sq:[0,1]},
+        {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  slingers: {
+    count: 1,
+    sides: [
+      [ {type:'moveNC',sq:[0,2]}, {type:'move',sq:[0,1]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'strike',sq:[-1,2]}, {type:'strike',sq:[0,2]}, {type:'strike',sq:[1,2]},
+        {type:'move',sq:[0,1]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  tribune: {
+    count: 1,
+    sides: [
+      [ {type:'formation',sq:[-1,0]}, {type:'formation',sq:[1,0]},
+        {type:'moveNC',sq:[0,1]}, {type:'move',sq:[-1,1]},
+        {type:'move',sq:[1,1]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'formation',sq:[0,1]}, {type:'moveNC',sq:[-1,0]}, {type:'moveNC',sq:[1,0]},
+        {type:'move',sq:[0,1]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  velites: {
+    count: 1,
+    sides: [
+      [ {type:'moveNC',sq:[-1,1]}, {type:'moveNC',sq:[0,1]}, {type:'moveNC',sq:[1,1]},
+        {type:'move',sq:[0,-1]} ],
+      [ {type:'strike',sq:[0,2]}, {type:'strike',sq:[-1,1]}, {type:'strike',sq:[1,1]},
+        {type:'moveNC',sq:[0,1]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  explorator: {
+    count: 1,
+    sides: [
+      [ {type:'moveNC',sq:[-1,1]}, {type:'moveNC',sq:[0,1]}, {type:'moveNC',sq:[1,1]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'moveNC',sq:[0,-1]} ],
+      [ {type:'moveNC',sq:[-1,2]}, {type:'moveNC',sq:[1,2]},
+        {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+  triarii: {
+    count: 1,
+    sides: [
+      [ {type:'move',sq:[0,1]}, {type:'move',sq:[-1,0]},
+        {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'move',sq:[-1,1]}, {type:'move',sq:[1,1]},
+        {type:'move',sq:[-1,-1]}, {type:'move',sq:[1,-1]} ],
+    ],
+  },
+  equites: {
+    count: 2,
+    sides: [
+      [ {type:'smash',sq:[0,2]}, {type:'move',sq:[-1,1]}, {type:'move',sq:[1,1]},
+        {type:'jump',sq:[-2,0]}, {type:'jump',sq:[2,0]}, {type:'move',sq:[0,-1]} ],
+      [ {type:'smash',sq:[0,2]}, {type:'jump',sq:[-1,2]}, {type:'jump',sq:[1,2]},
+        {type:'move',sq:[-1,0]}, {type:'move',sq:[1,0]}, {type:'move',sq:[0,-1]} ],
+    ],
+  },
+};
+
+// Display names
+const DISPLAY_NAMES = {
+  // Jarl
+  jarl:'Jarl', freeman:'Freeman', spearman:'Spearman', chieftain:'Chieftain',
+  vala:'Vala', berserker:'Berserker', shieldMaiden:'Shield Maiden',
+  archer:'Archer', huscarl:'Huscarl', warlord:'Warlord', gothi:'Gothi',
+  axeWarrior:'Axe Warrior', swordWarrior:'Sword Warrior',
+  huntsman:'Huntsman', ulberht:'Ulberht',
+  // Centurion
+  centurion:'Centurion', legionnaire:'Legionnaire', onager:'Onager',
+  hastati:'Hastati', warDogs:'War Dogs', primusPilus:'Primus Pilus',
+  optio:'Optio', slingers:'Slingers', tribune:'Tribune', velites:'Velites',
+  explorator:'Explorator', triarii:'Triarii', equites:'Equites',
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COLOR THEMES
+// ═══════════════════════════════════════════════════════════════════════════
+
+const COLORS = {
+  jarl:      { bg: '#d6dde6', line: '#181c26' },
+  centurion: { bg: '#ece4d2', line: '#301408' },
+  legend:    { bg: '#f4ede0', line: '#1a1208' },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ICON RENDERERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function iconMove(ctx, cx, cy, cs, C) {
+  ctx.fillStyle = C.line;
+  ctx.beginPath(); ctx.arc(cx, cy, cs * 0.30, 0, Math.PI*2); ctx.fill();
+}
+function iconMoveNC(ctx, cx, cy, cs, C) {
+  ctx.fillStyle = C.line;
+  ctx.beginPath(); ctx.arc(cx, cy, cs * 0.18, 0, Math.PI*2); ctx.fill();
+}
+function iconJump(ctx, cx, cy, cs, C) {
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cs * 0.09);
+  ctx.beginPath(); ctx.arc(cx, cy, cs * 0.30, 0, Math.PI*2); ctx.stroke();
+}
+function iconJumpNC(ctx, cx, cy, cs, C) {
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(0.7, cs * 0.07);
+  ctx.beginPath(); ctx.arc(cx, cy, cs * 0.18, 0, Math.PI*2); ctx.stroke();
+}
+function iconStrike(ctx, cx, cy, cs, C) {
+  const outer = cs * 0.34, inner = outer * 0.48;
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cs * 0.07);
+  ctx.beginPath();
+  for (let i = 0; i < 12; i++) {
+    const a = (i * Math.PI) / 6 - Math.PI / 2;
+    const r = (i % 2 === 0) ? outer : inner;
+    const fn = i === 0 ? 'moveTo' : 'lineTo';
+    ctx[fn](cx + Math.cos(a)*r, cy + Math.sin(a)*r);
+  }
+  ctx.closePath(); ctx.stroke();
+}
+function iconHammer(ctx, cx, cy, cs, C) {
+  const outer = cs * 0.34, inner = outer * 0.48;
+  ctx.fillStyle = C.line;
+  ctx.beginPath();
+  for (let i = 0; i < 12; i++) {
+    const a = (i * Math.PI) / 6 - Math.PI / 2;
+    const r = (i % 2 === 0) ? outer : inner;
+    const fn = i === 0 ? 'moveTo' : 'lineTo';
+    ctx[fn](cx + Math.cos(a)*r, cy + Math.sin(a)*r);
+  }
+  ctx.closePath(); ctx.fill();
+}
+function iconCommand(ctx, cx, cy, cs, C) {
+  const s = cs * 0.34, h = cs * 0.50;
+  ctx.fillStyle = C.line;
+  ctx.beginPath();
+  ctx.moveTo(cx-h, cy-h); ctx.lineTo(cx-h+s, cy-h); ctx.lineTo(cx-h, cy-h+s);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx+h, cy+h); ctx.lineTo(cx+h-s, cy+h); ctx.lineTo(cx+h, cy+h-s);
+  ctx.closePath(); ctx.fill();
+}
+function iconTriangle(ctx, cx, cy, cs, dir, filled, scale, C) {
+  const angle = Math.atan2(-dir[1], dir[0]);
+  const r = cs * 0.32 * (scale ?? 1);
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(-r*0.55, -r*0.85);
+  ctx.lineTo(-r*0.55,  r*0.85);
+  ctx.closePath();
+  if (filled) { ctx.fillStyle = C.line; ctx.fill(); }
+  else        { ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cs*0.09); ctx.stroke(); }
+  ctx.restore();
+}
+function iconSmash(ctx, cx, cy, cs, sq, C) {
+  // Chevron (❯) pointing toward sq
+  const [dc, dr] = sq;
+  const angle = Math.atan2(-dr, dc);
+  const r = cs * 0.32;
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(angle);
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(2, cs * 0.16);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-r*0.30, -r*0.78);
+  ctx.lineTo( r*0.52,  0);
+  ctx.lineTo(-r*0.30,  r*0.78);
+  ctx.stroke();
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+  ctx.restore();
+}
+function iconReady(ctx, cx, cy, cs, C) {
+  const r = cs * 0.28;
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1.5, cs * 0.11);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx-r, cy-r); ctx.lineTo(cx+r, cy+r);
+  ctx.moveTo(cx+r, cy-r); ctx.lineTo(cx-r, cy+r);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+function iconFormation(ctx, cx, cy, cs, C) {
+  // Diamond circumscribed in cell — vertices at cell edge midpoints
+  const r = cs * 0.47;
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cs * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(cx,   cy-r); ctx.lineTo(cx+r, cy);
+  ctx.lineTo(cx,   cy+r); ctx.lineTo(cx-r, cy);
+  ctx.closePath(); ctx.stroke();
+}
+function iconFormationSingle(ctx, cx, cy, cs, C) {
+  // Full formation with upper-left and lower-right sides removed
+  const r = cs * 0.47;
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cs * 0.08);
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r, cy); ctx.stroke(); // upper-right
+  ctx.beginPath(); ctx.moveTo(cx-r, cy); ctx.lineTo(cx, cy+r); ctx.stroke(); // lower-left
+  ctx.lineCap = 'butt';
+}
+function iconDefense(ctx, cx, cy, cs, C) {
+  const r = cs * 0.28;
+  ctx.fillStyle = C.line;
+  ctx.fillRect(cx-r, cy-r, r*2, r*2);
+}
+function iconShieldDefense(ctx, cx, cy, cs, C) {
+  const r = cs * 0.28;
+  ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cs * 0.08);
+  ctx.strokeRect(cx-r, cy-r, r*2, r*2);
+}
+function iconDread(ctx, cx, cy, cs, C) {
+  const r = cs * 0.28;
+  const eyeR = r * 0.26, eyeOff = r * 0.42, eyeY = cy - r * 0.12;
+  const jawY = cy + r * 0.38, jawH = r * 0.55;
+
+  // Cranium
+  ctx.fillStyle = C.line;
+  ctx.beginPath(); ctx.arc(cx, cy - r * 0.10, r, 0, Math.PI*2); ctx.fill();
+
+  // Eye sockets (negative space)
+  ctx.fillStyle = C.bg;
+  ctx.beginPath(); ctx.arc(cx - eyeOff, eyeY, eyeR, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + eyeOff, eyeY, eyeR, 0, Math.PI*2); ctx.fill();
+
+  // Jaw
+  ctx.fillStyle = C.line;
+  ctx.fillRect(cx - r * 0.72, jawY, r * 1.44, jawH);
+
+  // Tooth gaps (negative space)
+  ctx.fillStyle = C.bg;
+  const gapW = r * 0.26, gapH = jawH * 0.55;
+  for (let i = -1; i <= 1; i++) {
+    ctx.fillRect(cx + i * r * 0.44 - gapW / 2, jawY, gapW, gapH);
+  }
+}
+function iconPawn(ctx, cx, cy, cs, filled, C) {
+  const s = cs * 0.44;
+  const headR  = s * 0.27, headCY = cy - s * 0.30;
+  const bodyTopY = headCY + headR * 0.85, bodyBotY = cy + s * 0.40;
+  const topHW = headR * 0.75, botHW = headR * 1.65;
+  const baseHW = headR * 2.05, baseH = cs * 0.09;
+  if (filled) {
+    ctx.fillStyle = C.line;
+    ctx.beginPath(); ctx.arc(cx, headCY, headR, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx-topHW, bodyTopY); ctx.lineTo(cx+topHW, bodyTopY);
+    ctx.lineTo(cx+botHW, bodyBotY); ctx.lineTo(cx-botHW, bodyBotY);
+    ctx.closePath(); ctx.fill();
+    ctx.fillRect(cx-baseHW, bodyBotY, baseHW*2, baseH);
+  } else {
+    const lw = Math.max(0.8, cs * 0.06);
+    ctx.strokeStyle = C.line; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.arc(cx, headCY, headR-lw/2, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx-topHW, bodyTopY); ctx.lineTo(cx+topHW, bodyTopY);
+    ctx.lineTo(cx+botHW, bodyBotY); ctx.lineTo(cx-botHW, bodyBotY);
+    ctx.closePath(); ctx.stroke();
+    ctx.strokeRect(cx-baseHW, bodyBotY, baseHW*2, baseH);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TILE DRAWING
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LP = { leftFrac: 0.775, gridPad: 0.025, border: 0.018, sep: 0.024 };
+
+// Tile-key → [side0 png index, side1 png index] for Jarl art strips.
+// Art PNGs live at reference/art/silhouettes/jarl-art-NNN.png (71×290, alpha silhouettes).
+const JARL_ART_MAP = {
+  jarl:         [21, 24],
+  warlord:      [ 0,  1],
+  archer:       [ 2,  5],
+  axeWarrior:   [ 3,  6],
+  berserker:    [ 4,  7],
+  chieftain:    [ 8, 11],
+  freeman:      [ 9, 12],
+  gothi:        [15, 19],
+  huntsman:     [16, 20], // side1 shares png 20 with huscarl — verify
+  huscarl:      [20, 23],
+  shieldMaiden: [22, 25],
+  swordWarrior: [26, 29],
+  ulberht:      [27, 30],
+  vala:         [28, 31],
+  spearman:     [32, 35],
+};
+
+// Image cache and tinted-canvas cache.
+const ART_IMG_CACHE = {};   // src → {img, loaded}
+const ART_TINT_CACHE = {};  // `${src}|${color}` → offscreen canvas (tinted silhouette)
+
+function getArtImg(src) {
+  if (!ART_IMG_CACHE[src]) {
+    const entry = { img: new Image(), loaded: false };
+    entry.img.onload  = () => { entry.loaded = true; if (window.onArtLoaded) window.onArtLoaded(); };
+    entry.img.onerror = () => { entry.loaded = false; };
+    entry.img.src = src;
+    ART_IMG_CACHE[src] = entry;
+  }
+  return ART_IMG_CACHE[src];
+}
+
+function getTintedArt(src, color) {
+  const entry = getArtImg(src);
+  if (!entry.loaded) return null;
+  const key = `${src}|${color}`;
+  if (ART_TINT_CACHE[key]) return ART_TINT_CACHE[key];
+  const w = entry.img.naturalWidth, h = entry.img.naturalHeight;
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const oc = off.getContext('2d');
+  // The PNGs already have proper alpha (white→transparent). We use source-in
+  // compositing to recolor the silhouette without ever reading pixel data —
+  // this avoids the file:// canvas-taint security error.
+  oc.drawImage(entry.img, 0, 0);
+  oc.globalCompositeOperation = 'source-in';
+  oc.fillStyle = color;
+  oc.fillRect(0, 0, w, h);
+  ART_TINT_CACHE[key] = off;
+  return off;
+}
+
+function layout(size) {
+  const borderW = Math.max(1, size * LP.border);
+  const sepW    = Math.max(1.5, size * LP.sep);
+  const leftW   = size * LP.leftFrac;
+  const illW    = size - leftW - sepW * 0.5;
+  const pad     = size * LP.gridPad;
+  const cellSize = (leftW - 2 * pad) / 5;
+  const gridH    = cellSize * 5;
+  return {
+    borderW, sepW, leftW, illW, pad, cellSize,
+    gridX: pad, gridY: pad,
+    nameX: pad, nameY: pad + gridH + pad * 0.4,
+    nameW: leftW - 2 * pad, nameH: size - (pad + gridH + pad * 0.4) - pad * 0.5,
+    sepX: leftW, illX: leftW + sepW * 0.5,
+  };
+}
+
+function drawTile(canvas, tileKey, tileDef, sideIdx, C) {
+  const size = canvas.width;
+  const ctx  = canvas.getContext('2d');
+  const L    = layout(size);
+  const { cellSize, gridX, gridY } = L;
+
+  // Background
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = C.line; ctx.lineWidth = L.borderW;
+  ctx.strokeRect(L.borderW/2, L.borderW/2, size-L.borderW, size-L.borderW);
+
+  // Separator
+  ctx.strokeStyle = C.line; ctx.lineWidth = L.sepW;
+  ctx.beginPath(); ctx.moveTo(L.sepX, 0); ctx.lineTo(L.sepX, size); ctx.stroke();
+
+  // Grid
+  const span = cellSize * 5;
+  const lw = Math.max(0.5, cellSize * 0.055);
+  ctx.strokeStyle = C.line; ctx.lineWidth = lw;
+  for (let i = 0; i <= 5; i++) {
+    ctx.beginPath(); ctx.moveTo(gridX, gridY + i*cellSize); ctx.lineTo(gridX+span, gridY+i*cellSize); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gridX+i*cellSize, gridY); ctx.lineTo(gridX+i*cellSize, gridY+span); ctx.stroke();
+  }
+
+  // Icons
+  const tileCol = 2, tileRow = 2;
+  const actions = tileDef.sides[sideIdx] ?? [];
+  const hasReady = actions.some(a => a.type === 'ready');
+
+  for (const action of actions) {
+    if (action.type === 'ready') continue; // drawn in illustration zone below
+    const vec = action.sq ?? action.dir;
+    if (!vec) continue;
+    const [dc, dr] = vec;
+    const col = tileCol + dc, row = tileRow - dr;
+    if (col < 0 || col > 4 || row < 0 || row > 4) continue;
+    const cx = gridX + col * cellSize + cellSize/2;
+    const cy = gridY + row * cellSize + cellSize/2;
+
+    switch (action.type) {
+      case 'move':            iconMove(ctx, cx, cy, cellSize, C); break;
+      case 'moveNC':          iconMoveNC(ctx, cx, cy, cellSize, C); break;
+      case 'jump':            iconJump(ctx, cx, cy, cellSize, C); break;
+      case 'jumpNC':          iconJumpNC(ctx, cx, cy, cellSize, C); break;
+      case 'strike':          iconStrike(ctx, cx, cy, cellSize, C); break;
+      case 'hammer':          iconHammer(ctx, cx, cy, cellSize, C); break;
+      case 'command':         iconCommand(ctx, cx, cy, cellSize, C); break;
+      case 'slide':           iconTriangle(ctx, cx, cy, cellSize, action.dir, true,  1.0,  C); break;
+      case 'slideNC':         iconTriangle(ctx, cx, cy, cellSize, action.dir, true,  0.62, C); break;
+      case 'jumpSlide':       iconTriangle(ctx, cx, cy, cellSize, action.dir, false, 1.0,  C); break;
+      case 'jumpSlideNC':     iconTriangle(ctx, cx, cy, cellSize, action.dir, false, 0.62, C); break;
+      case 'smash':           iconSmash(ctx, cx, cy, cellSize, action.sq, C); break;
+      case 'formation':       iconFormation(ctx, cx, cy, cellSize, C); break;
+      case 'formationSingle': iconFormationSingle(ctx, cx, cy, cellSize, C); break;
+      case 'defense':         iconDefense(ctx, cx, cy, cellSize, C); break;
+      case 'shieldDefense':   iconShieldDefense(ctx, cx, cy, cellSize, C); break;
+      case 'dread':           iconDread(ctx, cx, cy, cellSize, C); break;
+    }
+  }
+
+  // Pawn marker (drawn last, on top)
+  iconPawn(ctx,
+    gridX + tileCol * cellSize + cellSize/2,
+    gridY + tileRow * cellSize + cellSize/2,
+    cellSize, sideIdx === 0, C
+  );
+
+  // Tile name (bottom of left zone)
+  const name = DISPLAY_NAMES[Object.keys(DISPLAY_NAMES).find(k => k)] ?? '?';
+  // (name is set by caller — skip here, handled outside)
+
+  // Illustration zone: per-tile silhouette from extracted PNG art.
+  const artIdxPair = JARL_ART_MAP[tileKey];
+  let drewArt = false;
+  if (artIdxPair) {
+    const idx = String(artIdxPair[sideIdx] ?? artIdxPair[0]).padStart(3, '0');
+    const src = `../reference/art/silhouettes/jarl-art-${idx}.png`;
+    const tinted = getTintedArt(src, C.line);
+    if (tinted) {
+      const mg = L.pad * 0.4;
+      const tw = L.illW - mg * 2;
+      const th = size - mg * 2;
+      // Preserve aspect ratio of 71×290.
+      const srcAR = tinted.width / tinted.height;
+      const dstAR = tw / th;
+      let drawW, drawH;
+      if (srcAR > dstAR) { drawW = tw; drawH = tw / srcAR; }
+      else               { drawH = th; drawW = th * srcAR; }
+      const dx = L.illX + (L.illW - drawW) / 2;
+      const dy = (size - drawH) / 2;
+      ctx.drawImage(tinted, dx, dy, drawW, drawH);
+      drewArt = true;
+    }
+  }
+  if (!drewArt) {
+    // Fallback: vertical pole placeholder.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L.illX, 0, L.illW, size); ctx.clip();
+    ctx.translate(L.illX, 0); ctx.scale(L.illW, size);
+    ctx.fillStyle = C.line;
+    const cx = 0.5, mg = 0.055;
+    const shW = 0.18 * 0.82, tipH = 0.09 * (1-2*mg), tipW = 0.48 * 0.82;
+    const top = mg, bot = 1-mg, h = bot-top;
+    ctx.fillRect(cx - shW/2, top + tipH, shW, h - tipH);
+    ctx.beginPath();
+    ctx.moveTo(cx, top); ctx.lineTo(cx+tipW/2, top+tipH); ctx.lineTo(cx-tipW/2, top+tipH);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // Ready icon: bottom of illustration zone, below the spear
+  if (hasReady) {
+    const rcx = L.illX + L.illW / 2;
+    const rcy = size - L.pad - L.illW * 0.55;
+    iconReady(ctx, rcx, rcy, L.illW, C);
+  }
+}
+
+function makeTileCard(tileKey, tileDef, C, size) {
+  const card = document.createElement('div');
+  card.className = 'tile-card';
+
+  const name = document.createElement('div');
+  name.className = 'tile-card-name';
+  name.textContent = DISPLAY_NAMES[tileKey] ?? tileKey;
+  card.appendChild(name);
+
+  const sides = document.createElement('div');
+  sides.className = 'tile-card-sides';
+
+  for (let s = 0; s < 2; s++) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tile-side-wrap';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    canvas.style.display = 'block';
+    drawTile(canvas, tileKey, tileDef, s, C);
+    wrap.appendChild(canvas);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'tile-side-label';
+    lbl.textContent = s === 0
+      ? (tileDef.noStartingSide ? 'Side A' : 'Side 0 (start)')
+      : (tileDef.noStartingSide ? 'Side B' : 'Side 1');
+    wrap.appendChild(lbl);
+
+    sides.appendChild(wrap);
+  }
+  card.appendChild(sides);
+
+  const meta = document.createElement('div');
+  meta.className = 'tile-card-meta';
+  const on  = tileDef.startOnBoard ?? 0;
+  const bag = tileDef.count - on;
+  const parts = [];
+  if (on  > 0) parts.push(`${on} on board`);
+  if (bag > 0) parts.push(`${bag} in bag`);
+  if (tileDef.noStartingSide) parts.push('no starting side');
+  meta.textContent = `×${tileDef.count}  —  ${parts.join(', ')}`;
+  card.appendChild(meta);
+
+  return card;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGEND
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LEGEND_ICONS = [
+  { label: 'move',             fn: (ctx,cx,cy,cs,C) => iconMove(ctx,cx,cy,cs,C) },
+  { label: 'moveNC\n(non-capture)', fn: (ctx,cx,cy,cs,C) => iconMoveNC(ctx,cx,cy,cs,C) },
+  { label: 'jump',             fn: (ctx,cx,cy,cs,C) => iconJump(ctx,cx,cy,cs,C) },
+  { label: 'jumpNC\n(non-capture)', fn: (ctx,cx,cy,cs,C) => iconJumpNC(ctx,cx,cy,cs,C) },
+  { label: 'strike',           fn: (ctx,cx,cy,cs,C) => iconStrike(ctx,cx,cy,cs,C) },
+  { label: 'hammer\n(★ filled)', fn: (ctx,cx,cy,cs,C) => iconHammer(ctx,cx,cy,cs,C) },
+  { label: 'slide →\n(▲ filled)', fn: (ctx,cx,cy,cs,C) => iconTriangle(ctx,cx,cy,cs,[1,0],true,1.0,C) },
+  { label: 'slideNC →\n(▲ smaller)', fn: (ctx,cx,cy,cs,C) => iconTriangle(ctx,cx,cy,cs,[1,0],true,0.62,C) },
+  { label: 'jumpSlide →\n(▲ open)', fn: (ctx,cx,cy,cs,C) => iconTriangle(ctx,cx,cy,cs,[1,0],false,1.0,C) },
+  { label: 'jumpSlideNC →\n(▲ open smaller)', fn: (ctx,cx,cy,cs,C) => iconTriangle(ctx,cx,cy,cs,[1,0],false,0.62,C) },
+  { label: 'smash →\n(❯ chevron)', fn: (ctx,cx,cy,cs,C) => iconSmash(ctx,cx,cy,cs,[1,0],C) },
+  { label: 'command',          fn: (ctx,cx,cy,cs,C) => iconCommand(ctx,cx,cy,cs,C) },
+  { label: 'ready\n(flip X)',  fn: (ctx,cx,cy,cs,C) => iconReady(ctx,cx,cy,cs,C) },
+  { label: 'formation\n(◇ full)', fn: (ctx,cx,cy,cs,C) => iconFormation(ctx,cx,cy,cs,C) },
+  { label: 'formationSingle\n(◇ open sides)', fn: (ctx,cx,cy,cs,C) => iconFormationSingle(ctx,cx,cy,cs,C) },
+  { label: 'defense\n(■ filled)', fn: (ctx,cx,cy,cs,C) => iconDefense(ctx,cx,cy,cs,C) },
+  { label: 'shieldDefense\n(□ stroked)', fn: (ctx,cx,cy,cs,C) => iconShieldDefense(ctx,cx,cy,cs,C) },
+  { label: 'dread\n(💀 skull)',  fn: (ctx,cx,cy,cs,C) => iconDread(ctx,cx,cy,cs,C) },
+];
+
+function buildLegend() {
+  const C   = COLORS.legend;
+  const cs  = 50;
+  const grid = document.getElementById('legend-grid');
+
+  for (const { label, fn } of LEGEND_ICONS) {
+    const entry = document.createElement('div');
+    entry.className = 'legend-entry';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = cs;
+    canvas.style.cssText = `display:block; border:1px solid #ccc; border-radius:3px; background:${C.bg}`;
+    const ctx = canvas.getContext('2d');
+    fn(ctx, cs/2, cs/2, cs, C);
+    entry.appendChild(canvas);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'legend-label';
+    lbl.style.whiteSpace = 'pre-line';
+    lbl.textContent = label;
+    entry.appendChild(lbl);
+
+    grid.appendChild(entry);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TILE_SIZE = 172;
+
+function buildGrid(containerId, tileSet, colorKey) {
+  const container = document.getElementById(containerId);
+  const C = COLORS[colorKey];
+  for (const [key, def] of Object.entries(tileSet)) {
+    container.appendChild(makeTileCard(key, def, C, TILE_SIZE));
+  }
+}
+
+buildLegend();
+buildGrid('jarl-grid',      JARL_TILES,      'jarl');
+buildGrid('centurion-grid', CENTURION_TILES, 'centurion');
+
+// When an art image finishes loading, redraw every tile canvas on the page.
+// Debounced so a burst of loads produces a single re-render pass.
+let _artRedrawTimer = null;
+window.onArtLoaded = () => {
+  if (_artRedrawTimer) return;
+  _artRedrawTimer = setTimeout(() => {
+    _artRedrawTimer = null;
+    redrawAllTiles();
+  }, 60);
+};
+
+function redrawAllTiles() {
+  const sets = [
+    { id: 'jarl-grid',      set: JARL_TILES,      color: COLORS.jarl      },
+    { id: 'centurion-grid', set: CENTURION_TILES, color: COLORS.centurion },
+  ];
+  for (const { id, set, color } of sets) {
+    const grid = document.getElementById(id);
+    if (!grid) continue;
+    const cards = grid.children;
+    const keys  = Object.keys(set);
+    for (let i = 0; i < keys.length && i < cards.length; i++) {
+      const def = set[keys[i]];
+      const canvases = cards[i].querySelectorAll('canvas');
+      for (let s = 0; s < 2 && s < canvases.length; s++) {
+        drawTile(canvases[s], keys[i], def, s, color);
+      }
+    }
+  }
+}
+</script>
+</body>
+</html>

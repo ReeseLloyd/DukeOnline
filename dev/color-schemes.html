@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DukeOnline — Color Scheme Proposals</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1e1c18;
+      color: #c8c4bc;
+      padding: 36px 32px;
+      min-width: 700px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f0ebe0;
+      margin-bottom: 4px;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 40px;
+    }
+
+    .scheme {
+      margin-bottom: 44px;
+    }
+
+    .scheme-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #e8e2d4;
+      margin-bottom: 18px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #333;
+      letter-spacing: 0.01em;
+    }
+
+    .set-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+
+    .set-label {
+      font-size: 12px;
+      color: #666;
+      width: 72px;
+      flex-shrink: 0;
+      padding-top: 6px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tiles {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+    }
+
+    .tile-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .tile-wrap canvas {
+      display: block;
+      border-radius: 2px;
+    }
+
+    .tile-caption {
+      font-size: 10px;
+      color: #555;
+      letter-spacing: 0.03em;
+    }
+
+    .player-divider {
+      width: 1px;
+      height: 120px;
+      background: #2e2c28;
+      margin: 0 4px;
+      align-self: center;
+    }
+
+    .swatches {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      justify-content: center;
+      padding-top: 4px;
+      margin-left: 4px;
+      align-self: center;
+    }
+
+    .swatch-pair {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .swatch {
+      width: 13px;
+      height: 13px;
+      border-radius: 2px;
+      border: 1px solid #3a3834;
+      flex-shrink: 0;
+    }
+
+    .swatch-code {
+      font-size: 10px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      color: #555;
+    }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid #2e2c28;
+      margin: 48px 0 40px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f0ebe0;
+      margin-bottom: 4px;
+      letter-spacing: 0.01em;
+    }
+
+    .board-option {
+      margin-bottom: 36px;
+    }
+
+    .board-option-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #e8e2d4;
+      margin-bottom: 6px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #333;
+      letter-spacing: 0.01em;
+    }
+
+    .board-meta {
+      font-size: 11px;
+      color: #555;
+      margin-bottom: 14px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    .board-canvas-wrap {
+      display: inline-block;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .board-legend {
+      display: flex;
+      gap: 20px;
+      margin-top: 10px;
+    }
+
+    .board-legend-item {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 10px;
+      color: #555;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>DukeOnline — Color Scheme Proposals</h1>
+  <p class="subtitle">Knight tile &nbsp;·&nbsp; Both sides &nbsp;·&nbsp; Both players &nbsp;·&nbsp; Side 0 = filled pawn (starting side), Side 1 = hollow pawn</p>
+
+  <div id="root"></div>
+
+  <hr class="section-divider">
+  <h2>Board Color Options</h2>
+  <p class="subtitle">All three tile sets (Duke, Jarl, Centurion) shown on each board. Tiles placed on their natural square color — light tiles on dark squares, dark tiles on light squares, so both contrasts are visible.</p>
+  <div id="board-root"></div>
+
+  <script>
+  // ── Tile data (Knight only) ──────────────────────────────────────────────────
+
+  const TILES = {
+    knight: {
+      sides: [
+        [
+          { type: 'jump', sq: [-1,  2] },
+          { type: 'jump', sq: [ 1,  2] },
+          { type: 'move', sq: [-1,  0] },
+          { type: 'move', sq: [ 1,  0] },
+          { type: 'move', sq: [ 0, -1] },
+          { type: 'move', sq: [ 0, -2] },
+        ],
+        [
+          { type: 'slide', dir: [ 0,  1] },
+          { type: 'move',  sq:  [-1, -1] },
+          { type: 'move',  sq:  [ 1, -1] },
+          { type: 'move',  sq:  [-2, -2] },
+          { type: 'move',  sq:  [ 2, -2] },
+        ],
+      ],
+    },
+  };
+
+  // ── Color schemes ────────────────────────────────────────────────────────────
+
+  const SCHEMES = [
+    {
+      name: 'Duke — existing (reference)',
+      sets: [
+        {
+          label: '',
+          players: [
+            { bg: '#f4ede0', line: '#1a1208' },
+            { bg: '#b5a088', line: '#1a1208' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Option 1 — Faithful Muted',
+      desc: 'Honors the physical sets; saturation dialled back ~40%.',
+      sets: [
+        {
+          label: 'Jarl',
+          players: [
+            { bg: '#d8d6ce', line: '#1c1c20' },
+            { bg: '#484850', line: '#e0ddd6' },
+          ],
+        },
+        {
+          label: 'Centurion',
+          players: [
+            { bg: '#ede4d4', line: '#3e1a16' },
+            { bg: '#6a3430', line: '#ede4d4' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Option 2 — Earthy Harmony',
+      desc: 'Duke neutral, Jarl cool-shifted, Centurion warm-shifted. Cohesive on a mixed board.',
+      sets: [
+        {
+          label: 'Jarl',
+          players: [
+            { bg: '#d6dde6', line: '#181c26' },
+            { bg: '#3e4a5c', line: '#d6dde6' },
+          ],
+        },
+        {
+          label: 'Centurion',
+          players: [
+            { bg: '#ece4d2', line: '#301408' },
+            { bg: '#6a3420', line: '#ece4d2' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Option 3 — Shared Neutral with Accent Lines',
+      desc: 'All sets use the same neutral structure; set identity lives in the line color only.',
+      sets: [
+        {
+          label: 'Jarl',
+          players: [
+            { bg: '#dddbd4', line: '#2a3040' },
+            { bg: '#42464e', line: '#cdd4e0' },
+          ],
+        },
+        {
+          label: 'Centurion',
+          players: [
+            { bg: '#e8e2d8', line: '#5a1e16' },
+            { bg: '#4a3830', line: '#e8d4c8' },
+          ],
+        },
+      ],
+    },
+  ];
+
+  // ── Renderer (adapted from tileRenderer.js) ──────────────────────────────────
+
+  const LP = { leftFrac: 0.775, gridPad: 0.025, border: 0.018, sep: 0.024 };
+
+  function _layout(size) {
+    const borderW  = Math.max(1,   size * LP.border);
+    const sepW     = Math.max(1.5, size * LP.sep);
+    const leftW    = size * LP.leftFrac;
+    const illW     = size - leftW - sepW * 0.5;
+    const pad      = size * LP.gridPad;
+    const cellSize = (leftW - 2 * pad) / 5;
+    const gridH    = cellSize * 5;
+    const gridX    = pad;
+    const gridY    = pad;
+    const nameX    = pad;
+    const nameY    = gridY + gridH + pad * 0.4;
+    const nameW    = leftW - 2 * pad;
+    const nameH    = size - nameY - pad * 0.5;
+    const sepX     = leftW;
+    const illX     = leftW + sepW * 0.5;
+    return { borderW, sepW, leftW, illW, pad, cellSize, gridX, gridY,
+             gridH, nameX, nameY, nameW, nameH, sepX, illX };
+  }
+
+  function drawTileC(ctx, x, y, size, type, side, C) {
+    const L = _layout(size);
+    // Background
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = L.borderW;
+    ctx.strokeRect(x + L.borderW/2, y + L.borderW/2, size - L.borderW, size - L.borderW);
+    // Separator
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = L.sepW;
+    ctx.beginPath(); ctx.moveTo(x + L.sepX, y); ctx.lineTo(x + L.sepX, y + size); ctx.stroke();
+    // Grid
+    const gx = x + L.gridX, gy = y + L.gridY;
+    const { cellSize } = L;
+    const span = cellSize * 5;
+    const lw   = Math.max(0.5, cellSize * 0.055);
+    ctx.strokeStyle = C.line; ctx.lineWidth = lw;
+    for (let i = 0; i <= 5; i++) {
+      ctx.beginPath(); ctx.moveTo(gx, gy + i*cellSize); ctx.lineTo(gx + span, gy + i*cellSize); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gx + i*cellSize, gy); ctx.lineTo(gx + i*cellSize, gy + span); ctx.stroke();
+    }
+    // Icons
+    const actions  = TILES[type]?.sides[side];
+    const tilePos  = TILES[type]?.tileGridPos ?? [2, 2];
+    const [tc, tr] = tilePos;
+    if (actions) {
+      for (const action of actions) {
+        const [dc, dr] = action.sq ?? action.dir;
+        const col = tc + dc, row = tr - dr;
+        if (col < 0 || col > 4 || row < 0 || row > 4) continue;
+        const cx = gx + col * cellSize + cellSize / 2;
+        const cy = gy + row * cellSize + cellSize / 2;
+        switch (action.type) {
+          case 'move':
+            ctx.fillStyle = C.line;
+            ctx.beginPath(); ctx.arc(cx, cy, cellSize*0.30, 0, Math.PI*2); ctx.fill();
+            break;
+          case 'jump':
+            ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cellSize*0.09);
+            ctx.beginPath(); ctx.arc(cx, cy, cellSize*0.30, 0, Math.PI*2); ctx.stroke();
+            break;
+          case 'strike': {
+            const outer = cellSize*0.34, inner = outer*0.48;
+            ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cellSize*0.07);
+            ctx.beginPath();
+            for (let i = 0; i < 12; i++) {
+              const a = (i * Math.PI)/6 - Math.PI/2;
+              const r = (i%2===0) ? outer : inner;
+              i===0 ? ctx.moveTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r)
+                    : ctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r);
+            }
+            ctx.closePath(); ctx.stroke();
+            break;
+          }
+          case 'slide':
+          case 'jumpSlide': {
+            const filled = action.type === 'slide';
+            const angle  = Math.atan2(-action.dir[1], action.dir[0]);
+            const r = cellSize * 0.30;
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(-r*0.6, -r*0.72);
+            ctx.lineTo(-r*0.15, 0); ctx.lineTo(-r*0.6, r*0.72);
+            ctx.closePath();
+            if (filled) { ctx.fillStyle = C.line; ctx.fill(); }
+            else { ctx.strokeStyle = C.line; ctx.lineWidth = Math.max(1, cellSize*0.09); ctx.stroke(); }
+            ctx.restore();
+            break;
+          }
+        }
+      }
+    }
+    // Pawn
+    const px = gx + tc*cellSize + cellSize/2;
+    const py = gy + tr*cellSize + cellSize/2;
+    const s  = cellSize * 0.44;
+    const headR    = s * 0.27, headCY  = py - s * 0.30;
+    const bodyTopY = headCY + headR * 0.85, bodyBotY = py + s * 0.40;
+    const topHW    = headR * 0.75, botHW = headR * 1.65;
+    const baseHW   = headR * 2.05, baseH = cellSize * 0.09;
+    if (side === 0) {
+      ctx.fillStyle = C.line;
+      ctx.beginPath(); ctx.arc(px, headCY, headR, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(px-topHW, bodyTopY); ctx.lineTo(px+topHW, bodyTopY);
+      ctx.lineTo(px+botHW, bodyBotY); ctx.lineTo(px-botHW, bodyBotY);
+      ctx.closePath(); ctx.fill();
+      ctx.fillRect(px-baseHW, bodyBotY, baseHW*2, baseH);
+    } else {
+      const lw = Math.max(0.8, cellSize*0.06);
+      ctx.strokeStyle = C.line; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.arc(px, headCY, headR-lw/2, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px-topHW, bodyTopY); ctx.lineTo(px+topHW, bodyTopY);
+      ctx.lineTo(px+botHW, bodyBotY); ctx.lineTo(px-botHW, bodyBotY);
+      ctx.closePath(); ctx.stroke();
+      ctx.strokeRect(px-baseHW, bodyBotY, baseHW*2, baseH);
+    }
+    // Name
+    const font = "'MedievalSharp', Georgia, 'Times New Roman', serif";
+    ctx.fillStyle = C.line; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    ctx.font = `${L.nameH * 0.72}px ${font}`;
+    const name     = 'Knight';
+    const measured = ctx.measureText(name).width;
+    const ncx = x + L.nameX + L.nameW/2;
+    const ncy = y + L.nameY + L.nameH/2;
+    if (measured > L.nameW * 0.96) {
+      ctx.save(); ctx.translate(ncx, ncy); ctx.scale((L.nameW*0.96)/measured, 1);
+      ctx.fillText(name, 0, 0); ctx.restore();
+    } else {
+      ctx.fillText(name, ncx, ncy);
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // Illustration (arrow-up for Knight)
+    const ix = x + L.illX, iy = y, iw = L.illW, ih = size;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ix, iy, iw, ih); ctx.clip();
+    ctx.translate(ix, iy); ctx.scale(iw, ih);
+    const mg = 0.055, w = 0.82;
+    const top = mg, bot = 1-mg, h = bot-top;
+    const headH = h*0.42, shaftW = w*0.30;
+    ctx.fillStyle = C.line;
+    ctx.beginPath();
+    ctx.moveTo(0.5, top);
+    ctx.lineTo(0.5+w/2, top+headH); ctx.lineTo(0.5+shaftW/2, top+headH);
+    ctx.lineTo(0.5+shaftW/2, bot);  ctx.lineTo(0.5-shaftW/2, bot);
+    ctx.lineTo(0.5-shaftW/2, top+headH); ctx.lineTo(0.5-w/2, top+headH);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Build page ───────────────────────────────────────────────────────────────
+
+  const SIZE = 120;
+  const root = document.getElementById('root');
+
+  for (const scheme of SCHEMES) {
+    const section = document.createElement('div');
+    section.className = 'scheme';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'scheme-title';
+    titleEl.textContent = scheme.name;
+    section.appendChild(titleEl);
+
+    for (const set of scheme.sets) {
+      const row = document.createElement('div');
+      row.className = 'set-row';
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'set-label';
+      labelEl.textContent = set.label;
+      row.appendChild(labelEl);
+
+      const tilesEl = document.createElement('div');
+      tilesEl.className = 'tiles';
+
+      for (let p = 0; p < set.players.length; p++) {
+        if (p > 0) {
+          const div = document.createElement('div');
+          div.className = 'player-divider';
+          tilesEl.appendChild(div);
+        }
+        const C = set.players[p];
+        for (let s = 0; s < 2; s++) {
+          const wrap = document.createElement('div');
+          wrap.className = 'tile-wrap';
+          const canvas = document.createElement('canvas');
+          canvas.width  = SIZE;
+          canvas.height = SIZE;
+          drawTileC(canvas.getContext('2d'), 0, 0, SIZE, 'knight', s, C);
+          wrap.appendChild(canvas);
+          const cap = document.createElement('div');
+          cap.className = 'tile-caption';
+          cap.textContent = `P${p} · Side ${s}`;
+          wrap.appendChild(cap);
+          tilesEl.appendChild(wrap);
+        }
+      }
+
+      row.appendChild(tilesEl);
+
+      // Swatch legend
+      const swatchesEl = document.createElement('div');
+      swatchesEl.className = 'swatches';
+      for (let p = 0; p < set.players.length; p++) {
+        const C = set.players[p];
+        const pair = document.createElement('div');
+        pair.className = 'swatch-pair';
+        pair.innerHTML = `
+          <span class="swatch" style="background:${C.bg};"></span>
+          <span class="swatch-code">${C.bg}</span>
+          <span class="swatch" style="background:${C.line};"></span>
+          <span class="swatch-code">${C.line}</span>
+          <span style="font-size:10px;color:#444;margin-left:2px;">P${p}</span>
+        `;
+        swatchesEl.appendChild(pair);
+      }
+      row.appendChild(swatchesEl);
+
+      section.appendChild(row);
+    }
+
+    root.appendChild(section);
+  }
+
+  // ── Board section ────────────────────────────────────────────────────────────
+
+  const BOARD_OPTIONS = [
+    { name: 'Option A — Warm Stone',        light: '#eceae4', dark: '#d6d4cd' },
+    { name: 'Option B — True Neutral',      light: '#ebebeb', dark: '#d4d4d4' },
+    { name: 'Option C — Near-White Minimal',light: '#f2f1ee', dark: '#e0dedb' },
+    { name: 'Option D — Cooler Slate',      light: '#eaeaee', dark: '#d2d2d8' },
+  ];
+
+  // Chosen tile colors (Option 2 — Earthy Harmony)
+  const TILE_PALETTES = {
+    duke:      { 0: { bg: '#f4ede0', line: '#1a1208' }, 1: { bg: '#b5a088', line: '#1a1208' } },
+    jarl:      { 0: { bg: '#d6dde6', line: '#181c26' }, 1: { bg: '#3e4a5c', line: '#d6dde6' } },
+    centurion: { 0: { bg: '#ece4d2', line: '#301408' }, 1: { bg: '#6a3420', line: '#ece4d2' } },
+  };
+
+  // [boardCol, boardRow, tileSet, player, side]
+  // Layout: 3 sets across, 2 rows. Each set gets 2 columns (P0 + P1).
+  // Col parity: (col+row)%2===0 = light square, odd = dark square.
+  // P0 (lighter tile) placed on dark squares for contrast; P1 on light squares.
+  //   Row 0: cols 0-1 = Duke, cols 2-3 = Jarl, cols 4-5 = Centurion
+  //   Row 1: same, side 1
+  //   Row 2: empty — shows board pattern unobstructed
+  const CELL  = 108;
+  const INSET  = 4;
+  const TSIZE  = CELL - INSET * 2;
+  const BCOLS  = 6;
+  const BROWS  = 3;
+
+  // (col+row)%2: 0=light, 1=dark
+  // P0 goes on dark squares (odd), P1 on light squares (even)
+  const PLACEMENTS = [
+    // Row 0, side 0
+    [0, 0, 'duke',      1, 0],   // col 0 row 0 → light → P1
+    [1, 0, 'duke',      0, 0],   // col 1 row 0 → dark  → P0
+    [2, 0, 'jarl',      1, 0],   // col 2 row 0 → light → P1
+    [3, 0, 'jarl',      0, 0],   // col 3 row 0 → dark  → P0
+    [4, 0, 'centurion', 1, 0],   // col 4 row 0 → light → P1
+    [5, 0, 'centurion', 0, 0],   // col 5 row 0 → dark  → P0
+    // Row 1, side 1
+    [0, 1, 'duke',      0, 1],   // col 0 row 1 → dark  → P0
+    [1, 1, 'duke',      1, 1],   // col 1 row 1 → light → P1
+    [2, 1, 'jarl',      0, 1],   // col 2 row 1 → dark  → P0
+    [3, 1, 'jarl',      1, 1],   // col 3 row 1 → light → P1
+    [4, 1, 'centurion', 0, 1],   // col 4 row 1 → dark  → P0
+    [5, 1, 'centurion', 1, 1],   // col 5 row 1 → light → P1
+    // Row 2: all empty — bare board
+  ];
+
+  const boardRoot = document.getElementById('board-root');
+
+  for (const board of BOARD_OPTIONS) {
+    const section = document.createElement('div');
+    section.className = 'board-option';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'board-option-title';
+    titleEl.textContent = board.name;
+    section.appendChild(titleEl);
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'board-meta';
+    metaEl.innerHTML =
+      `Light&nbsp; <span style="display:inline-block;width:11px;height:11px;background:${board.light};border:1px solid #3a3834;border-radius:2px;vertical-align:middle;"></span> ${board.light}` +
+      `&nbsp;&nbsp;&nbsp;Dark&nbsp; <span style="display:inline-block;width:11px;height:11px;background:${board.dark};border:1px solid #3a3834;border-radius:2px;vertical-align:middle;"></span> ${board.dark}`;
+    section.appendChild(metaEl);
+
+    const canvasWrap = document.createElement('div');
+    canvasWrap.className = 'board-canvas-wrap';
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = BCOLS * CELL;
+    canvas.height = BROWS * CELL;
+    const ctx = canvas.getContext('2d');
+
+    // Draw board squares
+    for (let r = 0; r < BROWS; r++) {
+      for (let c = 0; c < BCOLS; c++) {
+        ctx.fillStyle = (c + r) % 2 === 0 ? board.light : board.dark;
+        ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+      }
+    }
+
+    // Draw tiles
+    for (const [c, r, set, player, side] of PLACEMENTS) {
+      const C = TILE_PALETTES[set][player];
+      drawTileC(ctx, c * CELL + INSET, r * CELL + INSET, TSIZE, 'knight', side, C);
+    }
+
+    canvasWrap.appendChild(canvas);
+    section.appendChild(canvasWrap);
+
+    // Column labels
+    const legend = document.createElement('div');
+    legend.className = 'board-legend';
+    const labels = ['Duke P1', 'Duke P0', 'Jarl P1', 'Jarl P0', 'Centurion P1', 'Centurion P0'];
+    for (let i = 0; i < BCOLS; i++) {
+      const item = document.createElement('div');
+      item.className = 'board-legend-item';
+      item.style.width = CELL + 'px';
+      item.style.justifyContent = 'center';
+      item.textContent = labels[i];
+      legend.appendChild(item);
+    }
+    section.appendChild(legend);
+
+    boardRoot.appendChild(section);
+  }
+  </script>
+</body>
+</html>
