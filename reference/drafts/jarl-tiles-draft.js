@@ -47,7 +47,7 @@ const JARL_TILES_DRAFT = {
     sides: [
       // Side 0 — starting side
       [
-        { type: 'defense', sq: [ 0,  2] }, // verify
+        { type: 'defense', sq: [ 0,  2] },
         { type: 'jump',    sq: [-2,  1] },
         { type: 'jump',    sq: [ 2,  1] },
         { type: 'move',    sq: [-1,  0] },
@@ -76,17 +76,28 @@ const JARL_TILES_DRAFT = {
     count: 1,
     sides: [
       [
-        { type: 'strike', sq: [ 0,  2] },
+        { type: 'strike', sq: [ 0,  1] },
         { type: 'move',   sq: [-1,  0] },
         { type: 'move',   sq: [ 1,  0] },
         { type: 'jump',   sq: [ 0, -2] },
+        { type: 'command', sq: [-2,  2] },
+        { type: 'command', sq: [-1,  1] },
+        { type: 'command', sq: [-1, -1] },
+        { type: 'command', sq: [ 2,  2] },
+        { type: 'command', sq: [ 1,  1] },
+        { type: 'command', sq: [ 1, -1] },
       ],
       [
-        { type: 'moveNC', sq: [-1,  2] }, // verify — small dots flanking center
-        { type: 'move',   sq: [ 0,  2] },
-        { type: 'moveNC', sq: [ 1,  2] }, // verify
-        { type: 'move',   sq: [-1, -1] },
-        { type: 'move',   sq: [ 1, -1] },
+        { type: 'moveNC', sq: [-1,  1] },
+        { type: 'moveNC', sq: [-1, -1] },
+        { type: 'move',   sq: [ 0,  1] },
+        { type: 'moveNC', sq: [ 1,  1] },
+        { type: 'moveNC', sq: [ 1, -1] },
+        { type: 'move',   sq: [ 0, -1] },
+        { type: 'command', sq: [ 0,  2] },
+        { type: 'command', sq: [ 0,  1] },
+        { type: 'command', sq: [ 0, -1] },
+        { type: 'command', sq: [ 0, -2] },
       ],
     ],
   },
@@ -106,14 +117,17 @@ const JARL_TILES_DRAFT = {
         { type: 'move',    sq: [ 1, -1] },
       ],
       [
-        { type: 'strike',  sq: [-2,  2] },
-        { type: 'strike',  sq: [ 0,  2] },
-        { type: 'strike',  sq: [ 2,  2] },
-        { type: 'move',    sq: [-1,  1] },
-        { type: 'move',    sq: [ 1,  1] },
+        { type: 'strike',  sq: [-2,  1] },
+        { type: 'strike',  sq: [ 0,  1] },
+        { type: 'strike',  sq: [ 2,  1] },
+        { type: 'move',    sq: [-1,  0] },
+        { type: 'move',    sq: [ 1,  0] },
         { type: 'defense', sq: [ 0, -1] },
-      ],
+        { type: 'moveNC',  sq: [-1, -1] },
+        { type: 'moveNC',  sq: [ 0,  2] },
+        { type: 'moveNC',  sq: [ 1, -1] },
     ],
+  ],
   },
 
   // -------------------------------------------------------------------------
@@ -128,49 +142,50 @@ const JARL_TILES_DRAFT = {
         { type: 'move',    sq: [ 1,  1] },
         { type: 'move',    sq: [-2,  0] },
         { type: 'move',    sq: [ 2,  0] },
-        { type: 'jumpNC',  sq: [-2, -1] }, // verify small vs large
-        { type: 'moveNC',  sq: [-1, -1] }, // verify
-        { type: 'jumpNC',  sq: [ 2, -1] }, // verify
-        { type: 'moveNC',  sq: [ 0, -2] }, // verify
+        { type: 'jump',    sq: [-2, -1] },
+        { type: 'moveNC',  sq: [-1, -1] },
+        { type: 'jump',    sq: [ 2, -1] },
+        { type: 'moveNC',  sq: [ 0, -2] },
+        { type: 'moveNC',  sq: [ 1, -1] },
       ],
       [
-        { type: 'jumpNC',  sq: [-2,  2] }, // verify
+        { type: 'jump',    sq: [-2,  2] },
         { type: 'strike',  sq: [ 0,  2] },
-        { type: 'jumpNC',  sq: [ 2,  2] }, // verify
-        { type: 'defense', sq: [ 0,  0] },
-        { type: 'moveNC',  sq: [-2, -1] }, // verify
-        { type: 'move',    sq: [ 0, -1] },
-        { type: 'moveNC',  sq: [ 2, -1] }, // verify
+        { type: 'jump',    sq: [ 2,  2] },
+        { type: 'defense', sq: [ 0, -1] },
+        { type: 'moveNC',  sq: [-2, -2] },
+        { type: 'move',    sq: [ 0, -2] },
+        { type: 'moveNC',  sq: [ 2, -2] },
       ],
     ],
   },
 
   // -------------------------------------------------------------------------
   // BERSERKER  (1 copy)  — jarl-004.png / jarl-007.png
-  // Skull icons = hammer (strike-through-defense).
   // -------------------------------------------------------------------------
   berserker: {
     count: 1,
     sides: [
       [
         { type: 'move',   sq: [ 0,  2] },
-        { type: 'hammer', sq: [-1,  1] },
+        { type: 'strike', sq: [-1,  1] },
         { type: 'move',   sq: [ 0,  1] },
-        { type: 'hammer', sq: [ 1,  1] },
+        { type: 'move',   sq: [ 0, -1] },
+        { type: 'strike', sq: [ 1,  1] },
         { type: 'move',   sq: [-1,  0] },
         { type: 'move',   sq: [ 1,  0] },
-        { type: 'moveNC', sq: [ 0, -2] }, // verify
+        { type: 'moveNC', sq: [ 0, -2] },
       ],
       [
         { type: 'move',   sq: [-2,  2] },
         { type: 'move',   sq: [ 2,  2] },
-        { type: 'hammer', sq: [-1,  1] },
-        { type: 'strike', sq: [ 0,  1] },
-        { type: 'hammer', sq: [ 1,  1] },
         { type: 'move',   sq: [-2,  0] },
+        { type: 'move',   sq: [ 2,  0] },
+        { type: 'dread',  sq: [-1,  1] },
+        { type: 'dread',  sq: [ 1,  1] },
+        { type: 'strike', sq: [ 0,  1] },
         { type: 'strike', sq: [-1,  0] },
         { type: 'strike', sq: [ 1,  0] },
-        { type: 'move',   sq: [ 2,  0] },
       ],
     ],
   },
@@ -183,25 +198,30 @@ const JARL_TILES_DRAFT = {
     count: 1,
     sides: [
       [
-        { type: 'move',    sq: [-1,  2] },
-        { type: 'move',    sq: [ 1,  2] },
-        { type: 'jumpNC',  sq: [-1,  1] }, // verify
-        { type: 'jumpNC',  sq: [ 1,  1] }, // verify
+        { type: 'move',    sq: [-2,  2] },
+        { type: 'move',    sq: [ 2,  2] },
         { type: 'move',    sq: [-1, -1] },
-        { type: 'command', sq: [ 0, -1] },
         { type: 'move',    sq: [ 1, -1] },
-        { type: 'jumpNC',  sq: [-1, -2] }, // verify
-        { type: 'jumpNC',  sq: [ 1, -2] }, // verify
+        { type: 'move',    sq: [ 0,  1] },
+        { type: 'jumpNC',  sq: [-1, -2] },
+        { type: 'jumpNC',  sq: [ 1, -2] },
+        { type: 'jumpNC',  sq: [-2,  1] },
+        { type: 'jumpNC',  sq: [ 2,  1] },
+        { type: 'command', sq: [ 0,  1] },
+        { type: 'command', sq: [-1, -1] },
+        { type: 'command', sq: [ 1, -1] },
       ],
       [
         { type: 'jump',    sq: [ 0,  2] },
         { type: 'move',    sq: [-1,  1] },
         { type: 'move',    sq: [ 1,  1] },
-        { type: 'command', sq: [ 0,  0] }, // verify — command on tile itself
-        { type: 'jumpNC',  sq: [-2, -1] }, // verify
-        { type: 'move',    sq: [-1, -1] },
-        { type: 'move',    sq: [ 1, -1] },
-        { type: 'jumpNC',  sq: [ 2, -1] }, // verify
+        { type: 'move',    sq: [ 0, -1] },
+        { type: 'defense', sq: [ 0,  1] },
+        { type: 'moveNC',  sq: [-2, -2] },
+        { type: 'moveNC',  sq: [ 2, -2] },
+        { type: 'command', sq: [-1,  1] },
+        { type: 'command', sq: [ 1,  1] },
+        { type: 'command', sq: [ 0, -1] },
       ],
     ],
   },

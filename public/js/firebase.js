@@ -198,6 +198,7 @@ async function createOnlineGame(seed, firstPlayer, playerName, userId) {
     firstPlayer,
     state:       null,
     lastMove:    null,
+    moveHistory: [],
     createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
   });
@@ -285,10 +286,14 @@ function listenToGame(code, callback) {
  */
 async function writeGameState(code, state, move) {
   if (!_db) throw new Error('initFirebase() not called');
-  await _gamesRef().doc(code).update({
+  const update = {
     state:     _serializeState(state),
     lastMove:  move ?? null,
     status:    state.phase === 'gameover' ? 'gameover' : 'active',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (move !== null) {
+    update.moveHistory = firebase.firestore.FieldValue.arrayUnion(move);
+  }
+  await _gamesRef().doc(code).update(update);
 }

@@ -105,46 +105,7 @@
 
     /* ── Code display ────────────────────────────────────────────────────────── */
 
-    #code-box {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    #code-value {
-      flex: 1;
-      font-size: 2rem;
-      letter-spacing: 0.3em;
-      color: #c8a020;
-      font-family: 'Courier New', Courier, monospace;
-      text-align: center;
-      padding: 10px 12px;
-      background: rgba(0,0,0,0.30);
-      border: 1px solid #7a50a0;
-      border-radius: 6px;
-    }
-
-    #copy-btn {
-      width: auto;
-      padding: 8px 14px;
-      font-size: 0.82rem;
-    }
-
-    /* ── Waiting status ──────────────────────────────────────────────────────── */
-
-    #waiting-status {
-      font-size: 0.88rem;
-      text-align: center;
-      opacity: 0.72;
-      font-style: italic;
-      min-height: 1.2em;
-    }
-
-    #waiting-status.joined {
-      opacity: 1;
-      font-style: normal;
-      color: #70c870;
-    }
+      }
 
     /* ── Identity bar (shown when logged in) ─────────────────────────────────── */
 
@@ -216,6 +177,49 @@
 
     .btn-row { display: flex; gap: 10px; }
     .btn-row button { flex: 1; }
+
+    /* ── Inline created-game section (inside Play Online card) ─────────────── */
+
+    #created-section { display: flex; flex-direction: column; gap: 10px; }
+    #created-section[hidden] { display: none; }
+
+    #online-code-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #online-code-value {
+      flex: 1;
+      font-size: 1.6rem;
+      letter-spacing: 0.28em;
+      color: #c8a020;
+      font-family: 'Courier New', Courier, monospace;
+      text-align: center;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.30);
+      border: 1px solid #7a50a0;
+      border-radius: 6px;
+    }
+
+    #online-copy-btn { width: auto; padding: 8px 14px; font-size: 0.82rem; }
+
+    #online-waiting-status {
+      font-size: 0.82rem;
+      opacity: 0.68;
+      text-align: center;
+      font-style: italic;
+      min-height: 1.1em;
+    }
+
+    /* ── My Games scrollable body ────────────────────────────────────────────── */
+
+    #my-games-body {
+      max-height: 240px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(122,80,160,0.5) transparent;
+    }
 
     /* ── Version string ──────────────────────────────────────────────────────── */
 
@@ -343,24 +347,23 @@
 <div class="card" id="online-card" hidden>
   <h2>Play Online</h2>
   <button id="create-btn">Create Game</button>
+  <!-- Shown inline after creating a game -->
+  <div id="created-section" hidden>
+    <div id="online-code-row">
+      <div id="online-code-value"></div>
+      <button id="online-copy-btn">Copy</button>
+    </div>
+    <div id="online-waiting-status">Waiting for opponent to join&hellip;</div>
+    <div class="btn-row">
+      <button id="online-enter-btn">Go to Game</button>
+      <button id="online-cancel-btn">Cancel</button>
+    </div>
+  </div>
   <div class="join-row">
     <input type="text" id="join-input" placeholder="Enter code" maxlength="6" autocomplete="off" spellcheck="false">
     <button id="join-btn">Join</button>
   </div>
   <div class="error-msg" id="join-error"></div>
-</div>
-
-<!-- Online: after Create Game -->
-<div class="card" id="create-card" hidden>
-  <h2>Game Created</h2>
-  <p class="info-msg">Share this code with your opponent:</p>
-  <div id="code-box">
-    <div id="code-value">------</div>
-    <button id="copy-btn" title="Copy code">Copy</button>
-  </div>
-  <div id="waiting-status">Waiting for opponent to join&hellip;</div>
-  <button id="enter-btn">Enter Game</button>
-  <button id="cancel-btn">Cancel</button>
 </div>
 
 <div class="or-divider">— or —</div>
@@ -430,9 +433,9 @@ function _showLogin() {
   document.getElementById('identity-bar').hidden  = true;
   document.getElementById('online-card').hidden   = true;
   document.getElementById('my-games-card').hidden = true;
-  // Also reset any in-progress create flow
-  document.getElementById('create-card').hidden   = true;
-  document.getElementById('online-card').hidden   = true;
+  // Reset any in-progress create flow
+  document.getElementById('created-section').hidden = true;
+  document.getElementById('create-btn').disabled    = false;
 }
 
 // Form submit handles both button click and Enter in the PIN field.
@@ -674,15 +677,17 @@ document.getElementById('create-btn').addEventListener('click', async function (
     // Also persist to Firestore so the game appears on other devices.
     addGameToUser(username, userId, { code, player: 0, seed: _createSeed }).catch(console.error);
 
-    document.getElementById('online-card').hidden  = true;
-    document.getElementById('create-card').hidden  = false;
-    document.getElementById('code-value').textContent = code;
+    document.getElementById('online-code-value').textContent = code;
+    document.getElementById('created-section').hidden = false;
 
+    if (_createUnsub) _createUnsub();
     _createUnsub = listenToGame(code, function (data) {
       if (data.status === 'active') {
-        const ws = document.getElementById('waiting-status');
+        const ws = document.getElementById('online-waiting-status');
         ws.textContent = 'Opponent joined \u2014 ready to play!';
-        ws.classList.add('joined');
+        ws.style.color      = '#70c870';
+        ws.style.opacity    = '1';
+        ws.style.fontStyle  = 'normal';
       }
     });
 
@@ -712,31 +717,25 @@ function _copyText(text, btn, originalLabel) {
   setTimeout(() => { btn.textContent = originalLabel; }, 1800);
 }
 
-// ─── Copy code ────────────────────────────────────────────────────────────────
-
-document.getElementById('copy-btn').addEventListener('click', function () {
+document.getElementById('online-copy-btn').addEventListener('click', function () {
   if (!_createCode) return;
   _copyText(_createCode, this, 'Copy');
 });
 
-// ─── Enter game (player 0) ────────────────────────────────────────────────────
-
-document.getElementById('enter-btn').addEventListener('click', function () {
+document.getElementById('online-enter-btn').addEventListener('click', function () {
   if (!_createCode) return;
   if (_createUnsub) _createUnsub();
   window.location.href = `game.html?code=${_createCode}&player=0&seed=${_createSeed}`;
 });
 
-// ─── Cancel create ────────────────────────────────────────────────────────────
-
-document.getElementById('cancel-btn').addEventListener('click', function () {
+document.getElementById('online-cancel-btn').addEventListener('click', function () {
   if (_createUnsub) { _createUnsub(); _createUnsub = null; }
   _createCode = null;
-  document.getElementById('create-card').hidden  = true;
-  document.getElementById('online-card').hidden  = false;
+  document.getElementById('created-section').hidden = true;
+  const ws = document.getElementById('online-waiting-status');
+  ws.textContent = 'Waiting for opponent to join…';
+  ws.style.color = ws.style.opacity = ws.style.fontStyle = '';
   document.getElementById('create-btn').disabled = false;
-  document.getElementById('waiting-status').textContent = 'Waiting for opponent to join\u2026';
-  document.getElementById('waiting-status').classList.remove('joined');
 });
 
 // ─── Join flow ────────────────────────────────────────────────────────────────
@@ -799,6 +798,6 @@ document.getElementById('local-btn').addEventListener('click', function () {
 
 </script>
 
-<div class="version">2026.04.22.03</div>
+<div class="version">2026.04.29.01</div>
 </body>
 </html>

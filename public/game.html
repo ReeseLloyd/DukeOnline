@@ -749,6 +749,32 @@ function _navigateTo(idx, animate) {
 
 function _returnToLive() { _navigateTo(_history.length - 1, false); }
 
+/**
+ * Replay a persisted move list from Firestore to rebuild the timeline on reconnect.
+ * Starts from the initial createGame state already in _history[0] and applies
+ * each move in order, recording history entries along the way.
+ */
+function _replayMoveHistory(moveHistory) {
+  if (!moveHistory || moveHistory.length === 0) return;
+  let s = _history[0].state;
+  for (const move of moveHistory) {
+    const pre = s;
+    if (move.action === 'setup') {
+      s = applySetupPlacement(s, move.pos[0], move.pos[1]);
+    } else {
+      s = applyMove(s, move);
+    }
+    _history.push({ state: s, label: _buildMoveLabel(pre, move), move });
+  }
+  state      = s;
+  _viewIndex = _history.length - 1;
+  legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
+  _checkRestoreDrawMode();
+  _renderTimeline();
+  render();
+  updateUI();
+}
+
 function _renderTimeline() {
   const list = document.getElementById('timeline-list');
   if (!list) return;
@@ -988,10 +1014,18 @@ function _onGameSnapshot(data) {
   // No state written yet — both clients use their local createGame({ seed }) state.
   if (!data.state) return;
 
-  const newState = data.state;
-  const lastMove = data.lastMove;  // null for setup placements
+  // On reconnect (only the initial state is in local history), replay the full
+  // move history from Firestore so the timeline is restored.
+  if (_history.length === 1 && data.moveHistory?.length > 0) {
+    _replayMoveHistory(data.moveHistory);
+    return;
+  }
 
-  if (lastMove) {
+  const newState = data.state;
+  const lastMove = data.lastMove;
+  const isSetupMove = !lastMove || lastMove.action === 'setup';
+
+  if (!isSetupMove) {
     // Opponent made an active move — animate it.
     const preState = state;
     playMoveAnimation(preState, newState, lastMove, function () {
@@ -1004,10 +1038,10 @@ function _onGameSnapshot(data) {
       updateUI();
     });
   } else {
-    // Setup placement — instant snap.
+    // Setup placement — instant snap. Use real move data for timeline label if available.
     const preState = state;
     state      = newState;
-    _recordHistory(preState, newState, { action: 'setup', pos: null, subStep: -1 });
+    _recordHistory(preState, newState, lastMove ?? { action: 'setup', pos: null, subStep: -1 });
     if (_isViewingHistory()) _returnToLive();
     legalMoves = state.phase === 'active' ? getLegalMoves(state) : [];
     _checkRestoreDrawMode();
@@ -1769,7 +1803,7 @@ function submitTurn() {
     // Setup placement confirmed — record history, sync and hand off to AI / next step.
     _recordHistory(preState, state, move);
     if (_onlineMode) {
-      _syncToFirestore(null).catch(console.error);
+      _syncToFirestore(move).catch(console.error);
       if (state.phase === 'active') legalMoves = getLegalMoves(state);
     } else {
       if (state.phase === 'active') {
@@ -2148,6 +2182,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.22.03</div>
+<div class="version">2026.04.29.01</div>
 </body>
 </html>
