@@ -1,6 +1,7 @@
 /**
  * firebase.js
  * Firebase initialisation and Firestore helpers for DukeOnline multiplayer.
+ * @version 2026.05.05.01
  *
  * Depends on: Firebase compat SDK v10+ (app, firestore) loaded via CDN
  * before this file.  Firebase Auth is NOT used — identity is established

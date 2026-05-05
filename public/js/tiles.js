@@ -1,6 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
+ * @version 2026.05.05.01
  *
  * COORDINATE SYSTEM
  * -----------------

@@ -1,6 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
+ * @version 2026.05.05.01
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *

@@ -762,6 +762,10 @@ function _replayMoveHistory(moveHistory) {
     if (move.action === 'setup') {
       s = applySetupPlacement(s, move.pos[0], move.pos[1]);
     } else {
+      if (s.phase !== 'active') {
+        console.warn('_replayMoveHistory: active move found before setup complete — history truncated');
+        break;
+      }
       s = applyMove(s, move);
     }
     _history.push({ state: s, label: _buildMoveLabel(pre, move), move });
@@ -2182,6 +2186,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.04.29.01</div>
+<div class="version">2026.05.05.01</div>
 </body>
 </html>

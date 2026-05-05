@@ -1,6 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
+ * @version 2026.05.05.01
  *
  * Mirrors the physical tile layout:
  *
