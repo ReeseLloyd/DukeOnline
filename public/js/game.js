@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.05.05.01
+ * @version 2026.05.12.01
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -50,6 +50,8 @@
  */
 
 'use strict';
+
+const GAME_VERSION = '2026.05.12.01';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 

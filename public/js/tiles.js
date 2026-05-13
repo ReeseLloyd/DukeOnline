@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.05.05.01
+ * @version 2026.05.12.01
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -60,6 +60,8 @@
  * Each side is an array of action objects: { type, sq } or { type, dir }
  *
  */
+
+const TILES_VERSION = '2026.05.12.01';
 
 const TILES = {
 
