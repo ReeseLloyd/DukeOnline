@@ -6,11 +6,11 @@ The Duke is a two-player abstract strategy game played on a 6×6 grid. Players d
 
 ## Status
 
-Active development — base game with online multiplayer, AI opponent, and hotseat mode.
+Fully playable — base game with online multiplayer, AI opponent, and hotseat mode. Active development continues with bug fixes and polish.
 
 ## How to Play
 
-Open `duke.html` in any modern browser. No server or installation required.
+Visit **[your-domain-here]** in any modern browser. No installation required. Create an account with a username and PIN, then start or join a game.
 
 ## Rules Reference
 
@@ -79,3 +79,5 @@ A single board is used for all tile sets. The alternating square contrast is kep
 ## Development
 
 See `CLAUDE.md` for architecture decisions, constraints, and development notes.
+
+Deploy with `firebase deploy` from the repo root. Bump the version number first — see the Version Bump Checklist in `CLAUDE.md`.

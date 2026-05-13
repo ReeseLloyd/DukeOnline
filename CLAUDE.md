@@ -13,28 +13,30 @@ Base game only (no expansions). Supports:
 
 - **Frontend**: Vanilla HTML, CSS, and JavaScript — no frameworks, no build tools, no transpilation
 - **Realtime / state sync**: Firebase Firestore (real-time listeners)
-- **Auth**: Firebase Authentication (Google sign-in or anonymous to start)
+- **Auth**: Username + PIN identity (SHA-256 hash, no Firebase Auth — see Decisions Log)
 - **Hosting**: Firebase Hosting
 - **AI**: Client-side minimax with alpha-beta pruning — no server component
-- **Firebase SDK**: Loaded via CDN (Firebase JS SDK v9+ modular)
+- **Firebase SDK**: Loaded via CDN (Firebase compat SDK v10+)
 
 ## File Structure
 
-Multi-file project (not single `.html`). Structure TBD, but expected:
-
 ```
 /public
-  index.html        # Entry point / lobby
-  game.html         # Game board
-  css/
+  index.html          # Lobby — login, create/join game, My Games list
+  game.html           # Game board, all in-game UI and logic
+  .htaccess           # No-cache headers for HTML/JS/CSS
   js/
-    game.js         # Core game logic and state
-    tiles.js        # Tile definitions (movement data)
-    ai.js           # Minimax AI
-    firebase.js     # Firebase init and Firestore helpers
-    ui.js           # Rendering and event handling
-firebase.json       # Firebase Hosting config
-.firebaserc         # Firebase project alias
+    tiles.js          # Tile definitions and movement data
+    tileRenderer.js   # Canvas rendering for tile pieces
+    game.js           # Core game logic and state (createGame, applyMove, etc.)
+    ai.js             # Minimax AI with alpha-beta pruning
+    ai-worker.js      # Web Worker wrapper for AI (keeps UI thread unblocked)
+    firebase.js       # Firebase init and Firestore helpers
+firebase.json         # Firebase Hosting config
+firestore.rules       # Firestore security rules
+firestore.indexes.json
+dev/                  # Development utilities (color preview, etc.)
+reference/            # Rulebook and tile reference materials
 ```
 
 ## Architecture Notes
@@ -55,15 +57,13 @@ GCP/Firebase project ID: `dukeonline-71c49`
 
 ## Current State
 
-Architecture decided. No code yet. See `_resources/` for reference materials (rulebook, tile diagrams, etc.).
+Fully playable. Online multiplayer, AI opponent, and hotseat mode all working. Deployed to Firebase Hosting. Active development continues with bug fixes and polish.
 
 ## What's Next
 
-1. Initialize Firebase project and link to this repo (`firebase init`)
-2. Define tile movement data format
-3. Define full base game tile roster (both sides of each tile)
-4. Sketch UI layout and board rendering approach
-5. Begin coding: game state → rendering → Firebase sync → AI
+- Diagnose and fix incomplete `moveHistory` in Firestore for online games (player 1's setup moves may not be written — root cause unconfirmed, likely a silent Firestore write failure)
+- Improve error surfacing for Firestore write failures (currently `.catch(console.error)` only — user sees nothing)
+- Consider adding `player` field to move objects in Firestore for easier debugging
 
 ## Decisions Log
 
@@ -83,6 +83,22 @@ Architecture decided. No code yet. See `_resources/` for reference materials (ru
 
 [2026-04-14] Auth Option B noted for future: Firebase Email Magic Link (passwordless). Zero-friction, real Firebase Auth, proper account ownership. Upgrade path if the game grows beyond a small friend group. Implementation: enable Email Link sign-in in Firebase console, call sendSignInLinkToEmail / signInWithEmailLink — Firebase handles everything, no Cloud Functions needed.
 
+[2026-05-12] Version scheme: `YYYY.MM.DD.NN`. Each JS file exports a named VERSION constant (`TILES_VERSION`, `TILE_RENDERER_VERSION`, `GAME_VERSION`, `AI_VERSION`, `FIREBASE_VERSION`). `<script src>` tags use `?v=VERSION` query strings for cache-busting. Both HTML files include a runtime version check that triggers a one-time reload (with `?_cb=timestamp` + `sessionStorage` guard) if any loaded version doesn't match `EXPECTED`.
+
+## Version Bump Checklist
+
+When bumping the version, update all of the following:
+
+1. JSDoc `@version` comment in each JS file
+2. Named `*_VERSION` constant in each JS file
+3. `?v=` query string on every `<script src>` tag in `game.html` and `index.html`
+4. `EXPECTED` version string in the runtime check block in `game.html` and `index.html`
+5. `<div class="version">` display string in `game.html` and `index.html`
+6. `README.md` if it carries a version reference
+
+Then: commit all changed files, merge to `main`, push, deploy with `firebase deploy`.
+
 ## What Hasn't Worked
 
-<!-- Populate as development proceeds -->
+- **Stale cached JS (2026-05)**: Remote players (especially on mobile or repeat visitors) were loading old JS files from browser cache, causing version mismatches and unplayable games. Fixed with `?v=` cache-busting query strings on all script tags and a runtime version check that forces a reload when versions don't match.
+- **Incomplete moveHistory in Firestore (2026-05, unresolved)**: For online games, `moveHistory` sometimes only contains player 0's setup moves — player 1's placements reach `lastMove` (an overwrite) but don't appear in `moveHistory` (which uses `arrayUnion`). Root cause not confirmed; likely a silent Firestore write failure on player 1's client. The symptom is a broken game state after reconnect, since `_replayMoveHistory` reconstructs from the incomplete array.
