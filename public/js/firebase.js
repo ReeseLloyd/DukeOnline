@@ -1,7 +1,7 @@
 /**
  * firebase.js
  * Firebase initialisation and Firestore helpers for DukeOnline multiplayer.
- * @version 2026.05.12.01
+ * @version 2026.05.15.01
  *
  * Depends on: Firebase compat SDK v10+ (app, firestore) loaded via CDN
  * before this file.  Firebase Auth is NOT used — identity is established
@@ -52,7 +52,7 @@
 
 'use strict';
 
-const FIREBASE_VERSION = '2026.05.12.01';
+const FIREBASE_VERSION = '2026.05.15.01';
 
 const _FIREBASE_CONFIG = {
   apiKey:            'AIzaSyA_zWfQPC6Ij2y-9Z0ZmfNKKFWr1RQ33p0',
@@ -296,7 +296,11 @@ async function writeGameState(code, state, move) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
   if (move !== null) {
-    update.moveHistory = firebase.firestore.FieldValue.arrayUnion(move);
+    // arrayUnion deduplicates by value — identical moves (same action/from/to) occurring
+    // more than once in a game would be silently dropped, corrupting replay.  Adding _seq
+    // (the post-move turn counter) guarantees each entry is structurally unique.
+    const seqMove = { ...move, _seq: state.turn };
+    update.moveHistory = firebase.firestore.FieldValue.arrayUnion(seqMove);
   }
   await _gamesRef().doc(code).update(update);
 }
