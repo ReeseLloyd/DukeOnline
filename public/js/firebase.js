@@ -1,7 +1,7 @@
 /**
  * firebase.js
  * Firebase initialisation and Firestore helpers for DukeOnline multiplayer.
- * @version 2026.05.15.01
+ * @version 2026.05.19.01
  *
  * Depends on: Firebase compat SDK v10+ (app, firestore) loaded via CDN
  * before this file.  Firebase Auth is NOT used — identity is established
@@ -52,7 +52,7 @@
 
 'use strict';
 
-const FIREBASE_VERSION = '2026.05.15.01';
+const FIREBASE_VERSION = '2026.05.19.01';
 
 const _FIREBASE_CONFIG = {
   apiKey:            'AIzaSyA_zWfQPC6Ij2y-9Z0ZmfNKKFWr1RQ33p0',

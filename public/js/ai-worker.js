@@ -1,7 +1,7 @@
 /**
  * ai-worker.js
  * Web Worker wrapper for the Duke AI.
- * @version 2026.05.15.01
+ * @version 2026.05.19.01
  *
  * Runs in a background thread so the AI search never blocks the UI.
  *
