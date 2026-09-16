@@ -46,6 +46,10 @@
       padding-bottom: 10px;
     }
 
+    /* Author-stylesheet rules beat the UA [hidden] rule regardless of specificity,
+       so any element whose class sets `display` needs an explicit override. */
+    .card[hidden], .play-step[hidden] { display: none; }
+
     /* ── Buttons ─────────────────────────────────────────────────────────────── */
 
     button {
@@ -164,33 +168,29 @@
 
     .field-row input:focus { outline: 1px solid #7a50a0; }
 
-    /* ── Divider ─────────────────────────────────────────────────────────────── */
-
-    .or-divider {
-      font-size: 0.78rem;
-      opacity: 0.4;
-      letter-spacing: 0.1em;
-      text-align: center;
-    }
-
-    /* ── Offline row ─────────────────────────────────────────────────────────── */
+    /* ── Button rows ─────────────────────────────────────────────────────────── */
 
     .btn-row { display: flex; gap: 10px; }
     .btn-row button { flex: 1; }
 
-    /* ── Inline created-game section (inside Play Online card) ─────────────── */
+    /* ── Play card: branching steps ──────────────────────────────────────────── */
 
-    #created-section { display: flex; flex-direction: column; gap: 10px; }
-    #created-section[hidden] { display: none; }
+    .play-step { display: flex; flex-direction: column; gap: 10px; }
 
-    #online-code-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .back-btn {
+      width: auto;
+      align-self: flex-start;
+      background: none;
+      border: none;
+      color: #ede0c8;
+      opacity: 0.55;
+      padding: 2px 0;
+      font-size: 0.8rem;
     }
 
+    .back-btn:hover { opacity: 0.9; background: none; }
+
     #online-code-value {
-      flex: 1;
       font-size: 1.6rem;
       letter-spacing: 0.28em;
       color: #c8a020;
@@ -202,8 +202,6 @@
       border-radius: 6px;
     }
 
-    #online-copy-btn { width: auto; padding: 8px 14px; font-size: 0.82rem; }
-
     #online-waiting-status {
       font-size: 0.82rem;
       opacity: 0.68;
@@ -211,6 +209,15 @@
       font-style: italic;
       min-height: 1.1em;
     }
+
+    #local-diff-slider {
+      width: 100%;
+      accent-color: #7a50a0;
+      cursor: pointer;
+      margin: 4px 0 2px;
+    }
+
+    #local-diff-label { color: #c8a020; font-weight: bold; }
 
     /* ── My Games scrollable body ────────────────────────────────────────────── */
 
@@ -343,15 +350,34 @@
   </div>
 </div>
 
-<!-- Online: default view (hidden until logged in) -->
-<div class="card" id="online-card" hidden>
-  <h2>Play Online</h2>
-  <button id="create-btn">Create Game</button>
-  <!-- Shown inline after creating a game -->
-  <div id="created-section" hidden>
-    <div id="online-code-row">
-      <div id="online-code-value"></div>
-      <button id="online-copy-btn">Copy</button>
+<!-- Play (hidden until logged in) -->
+<div class="card" id="play-card" hidden>
+  <h2>Play</h2>
+
+  <!-- Step: root choice -->
+  <div id="play-step-root" class="play-step">
+    <div class="btn-row">
+      <button id="play-online-btn">Online</button>
+      <button id="play-local-btn">Local</button>
+    </div>
+  </div>
+
+  <!-- Step: online — new or join -->
+  <div id="play-step-online" class="play-step" hidden>
+    <div class="btn-row">
+      <button id="online-new-btn">New Game</button>
+      <button id="online-join-btn">Join Existing</button>
+    </div>
+    <div class="error-msg" id="online-error"></div>
+    <button class="back-btn" data-back="root">&larr; Back</button>
+  </div>
+
+  <!-- Step: online — game created, waiting for opponent -->
+  <div id="play-step-online-created" class="play-step" hidden>
+    <div id="online-code-value"></div>
+    <div class="btn-row">
+      <button id="online-copy-btn">Copy Code</button>
+      <button id="online-copy-link-btn">Copy Link</button>
     </div>
     <div id="online-waiting-status">Waiting for opponent to join&hellip;</div>
     <div class="btn-row">
@@ -359,18 +385,33 @@
       <button id="online-cancel-btn">Cancel</button>
     </div>
   </div>
-  <div class="join-row">
-    <input type="text" id="join-input" placeholder="Enter code" maxlength="6" autocomplete="off" spellcheck="false">
-    <button id="join-btn">Join</button>
+
+  <!-- Step: online — join by code -->
+  <div id="play-step-online-join" class="play-step" hidden>
+    <div class="join-row">
+      <input type="text" id="join-input" placeholder="Enter code" maxlength="6" autocomplete="off" spellcheck="false">
+      <button id="join-btn">Join</button>
+    </div>
+    <div class="error-msg" id="join-error"></div>
+    <button class="back-btn" data-back="online">&larr; Back</button>
   </div>
-  <div class="error-msg" id="join-error"></div>
-</div>
 
-<div class="or-divider">— or —</div>
+  <!-- Step: local — 1v1 or vs AI -->
+  <div id="play-step-local" class="play-step" hidden>
+    <div class="btn-row">
+      <button id="local-hotseat-btn">1 vs 1</button>
+      <button id="local-ai-btn">vs. AI</button>
+    </div>
+    <button class="back-btn" data-back="root">&larr; Back</button>
+  </div>
 
-<div class="card">
-  <h2>Play Locally</h2>
-  <button id="local-btn">Local Game</button>
+  <!-- Step: local — AI difficulty -->
+  <div id="play-step-local-ai" class="play-step" hidden>
+    <p>Difficulty: <span id="local-diff-label">4 &#x2014; Medium</span></p>
+    <input type="range" id="local-diff-slider" min="1" max="8" value="4">
+    <button id="local-diff-start-btn">Start Game</button>
+    <button class="back-btn" data-back="local">&larr; Back</button>
+  </div>
 </div>
 
 <!-- Firebase compat SDK (no Auth — identity is username+PIN hash) -->
@@ -378,17 +419,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
 <!-- Tile renderer for favicon -->
-<script src="js/tiles.js?v=2026.05.19.01"></script>
-<script src="js/tileRenderer.js?v=2026.05.19.01"></script>
+<script src="js/tiles.js?v=2026.09.15.01"></script>
+<script src="js/tileRenderer.js?v=2026.09.15.01"></script>
 
-<script src="js/firebase.js?v=2026.05.19.01"></script>
+<script src="js/firebase.js?v=2026.09.15.01"></script>
 
 <script>
 'use strict';
 
 // ─── Version check ────────────────────────────────────────────────────────────
 (function () {
-  const EXPECTED = '2026.05.19.01';
+  const EXPECTED = '2026.09.15.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && FIREBASE_VERSION      === EXPECTED;
@@ -440,18 +481,72 @@ function _showLobby() {
   document.getElementById('login-card').hidden    = true;
   document.getElementById('identity-bar').hidden  = false;
   document.getElementById('identity-name').textContent = _getUsername();
-  document.getElementById('online-card').hidden   = false;
+  document.getElementById('play-card').hidden     = false;
   renderMyGames();
+  _applyJoinParam();
 }
 
 function _showLogin() {
   document.getElementById('login-card').hidden    = false;
   document.getElementById('identity-bar').hidden  = true;
-  document.getElementById('online-card').hidden   = true;
+  document.getElementById('play-card').hidden     = true;
   document.getElementById('my-games-card').hidden = true;
   // Reset any in-progress create flow
-  document.getElementById('created-section').hidden = true;
-  document.getElementById('create-btn').disabled    = false;
+  _playStep('root');
+  document.getElementById('online-new-btn').disabled = false;
+}
+
+// ─── Play card: branching steps ──────────────────────────────────────────────
+
+function _playStep(step) {
+  document.querySelectorAll('.play-step').forEach(el => { el.hidden = true; });
+  document.getElementById('play-step-' + step).hidden = false;
+}
+
+document.getElementById('play-online-btn').addEventListener('click', () => _playStep('online'));
+document.getElementById('play-local-btn').addEventListener('click', () => _playStep('local'));
+document.querySelectorAll('.back-btn').forEach(btn => {
+  btn.addEventListener('click', () => _playStep(btn.dataset.back));
+});
+
+document.getElementById('online-join-btn').addEventListener('click', function () {
+  clearError();
+  _playStep('online-join');
+  document.getElementById('join-input').focus();
+});
+
+document.getElementById('local-hotseat-btn').addEventListener('click', function () {
+  window.location.href = 'game.html?mode=hotseat';
+});
+
+document.getElementById('local-ai-btn').addEventListener('click', function () {
+  _playStep('local-ai');
+});
+
+document.getElementById('local-diff-slider').addEventListener('input', function () {
+  document.getElementById('local-diff-label').textContent = _diffLabel(parseInt(this.value));
+});
+
+document.getElementById('local-diff-start-btn').addEventListener('click', function () {
+  const depth = document.getElementById('local-diff-slider').value;
+  window.location.href = 'game.html?mode=ai&difficulty=' + depth;
+});
+
+function _diffLabel(d) {
+  const name = d <= 2 ? 'Easy' : d <= 5 ? 'Medium' : d <= 7 ? 'Hard' : 'Expert';
+  return d + ' — ' + name;
+}
+
+// ─── Shareable join link (?join=CODE pre-fills the join step) ───────────────
+
+const _urlParams     = new URLSearchParams(window.location.search);
+const _joinCodeParam = (_urlParams.get('join') || '').trim().toUpperCase();
+
+function _applyJoinParam() {
+  if (!_joinCodeParam) return;
+  document.getElementById('join-input').value = _joinCodeParam;
+  _playStep('online');
+  _playStep('online-join');
 }
 
 // Form submit handles both button click and Enter in the PIN field.
@@ -666,16 +761,19 @@ let _createUnsub  = null;
 function showError(msg) { document.getElementById('join-error').textContent = msg; }
 function clearError()   { document.getElementById('join-error').textContent = ''; }
 
+function showOnlineError(msg) { document.getElementById('online-error').textContent = msg; }
+function clearOnlineError()   { document.getElementById('online-error').textContent = ''; }
+
 // ─── Create flow ──────────────────────────────────────────────────────────────
 
-document.getElementById('create-btn').addEventListener('click', async function () {
+document.getElementById('online-new-btn').addEventListener('click', async function () {
   this.disabled = true;
-  clearError();
+  clearOnlineError();
 
   const username = _getUsername();
   const userId   = _getUserId();
   if (!username) {
-    showError('Sign in before creating a game.');
+    showOnlineError('Sign in before creating a game.');
     this.disabled = false;
     return;
   }
@@ -694,7 +792,7 @@ document.getElementById('create-btn').addEventListener('click', async function (
     addGameToUser(username, userId, { code, player: 0, seed: _createSeed }).catch(console.error);
 
     document.getElementById('online-code-value').textContent = code;
-    document.getElementById('created-section').hidden = false;
+    _playStep('online-created');
 
     if (_createUnsub) _createUnsub();
     _createUnsub = listenToGame(code, function (data) {
@@ -709,7 +807,7 @@ document.getElementById('create-btn').addEventListener('click', async function (
 
   } catch (e) {
     console.error(e);
-    showError('Could not create game. Check your connection and try again.');
+    showOnlineError('Could not create game. Check your connection and try again.');
     this.disabled = false;
   }
 });
@@ -735,7 +833,13 @@ function _copyText(text, btn, originalLabel) {
 
 document.getElementById('online-copy-btn').addEventListener('click', function () {
   if (!_createCode) return;
-  _copyText(_createCode, this, 'Copy');
+  _copyText(_createCode, this, 'Copy Code');
+});
+
+document.getElementById('online-copy-link-btn').addEventListener('click', function () {
+  if (!_createCode) return;
+  const url = `${location.origin}${location.pathname}?join=${_createCode}`;
+  _copyText(url, this, 'Copy Link');
 });
 
 document.getElementById('online-enter-btn').addEventListener('click', function () {
@@ -747,11 +851,11 @@ document.getElementById('online-enter-btn').addEventListener('click', function (
 document.getElementById('online-cancel-btn').addEventListener('click', function () {
   if (_createUnsub) { _createUnsub(); _createUnsub = null; }
   _createCode = null;
-  document.getElementById('created-section').hidden = true;
   const ws = document.getElementById('online-waiting-status');
   ws.textContent = 'Waiting for opponent to join…';
   ws.style.color = ws.style.opacity = ws.style.fontStyle = '';
-  document.getElementById('create-btn').disabled = false;
+  document.getElementById('online-new-btn').disabled = false;
+  _playStep('online');
 });
 
 // ─── Join flow ────────────────────────────────────────────────────────────────
@@ -795,25 +899,20 @@ async function handleJoin() {
   }
 }
 
-// ─── Local game ───────────────────────────────────────────────────────────────
-
-document.getElementById('local-btn').addEventListener('click', function () {
-  window.location.href = 'game.html';
-});
-
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
-(async () => {
-  // If identity is already stored on this device, skip login and show lobby.
-  if (_getUsername() && _getUserId()) {
-    try { await initFirebase(); } catch (_) {}
-    _showLobby();
-  }
-  // Otherwise the login card is visible by default — no action needed.
-})();
+// If identity is already stored on this device, skip login and show the lobby
+// immediately — no need to wait on a Firebase connection first. My Games
+// re-renders once Firestore is actually ready (renderMyGames degrades
+// gracefully to "unknown" status in the meantime).
+if (_getUsername() && _getUserId()) {
+  _showLobby();
+  initFirebase().then(renderMyGames).catch(() => {});
+}
+// Otherwise the login card is visible by default — no action needed.
 
 </script>
 
-<div class="version">2026.05.19.01</div>
+<div class="version">2026.09.15.01</div>
 </body>
 </html>
