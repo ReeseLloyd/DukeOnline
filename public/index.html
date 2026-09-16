@@ -342,14 +342,6 @@
   </form>
 </div>
 
-<!-- My Games (hidden until populated) -->
-<div class="card" id="my-games-card" hidden>
-  <h2>My Games</h2>
-  <div id="my-games-body">
-    <div id="my-games-loading">Loading&hellip;</div>
-  </div>
-</div>
-
 <!-- Play (hidden until logged in) -->
 <div class="card" id="play-card" hidden>
   <h2>Play</h2>
@@ -414,22 +406,30 @@
   </div>
 </div>
 
+<!-- My Games (hidden until populated) -->
+<div class="card" id="my-games-card" hidden>
+  <h2>My Games</h2>
+  <div id="my-games-body">
+    <div id="my-games-loading">Loading&hellip;</div>
+  </div>
+</div>
+
 <!-- Firebase compat SDK (no Auth — identity is username+PIN hash) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
 <!-- Tile renderer for favicon -->
-<script src="js/tiles.js?v=2026.09.15.01"></script>
-<script src="js/tileRenderer.js?v=2026.09.15.01"></script>
+<script src="js/tiles.js?v=2026.09.15.02"></script>
+<script src="js/tileRenderer.js?v=2026.09.15.02"></script>
 
-<script src="js/firebase.js?v=2026.09.15.01"></script>
+<script src="js/firebase.js?v=2026.09.15.02"></script>
 
 <script>
 'use strict';
 
 // ─── Version check ────────────────────────────────────────────────────────────
 (function () {
-  const EXPECTED = '2026.09.15.01';
+  const EXPECTED = '2026.09.15.02';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && FIREBASE_VERSION      === EXPECTED;
@@ -913,6 +913,6 @@ if (_getUsername() && _getUserId()) {
 
 </script>
 
-<div class="version">2026.09.15.01</div>
+<div class="version">2026.09.15.02</div>
 </body>
 </html>
