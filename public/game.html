@@ -600,11 +600,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.09.15.02"></script>
-<script src="js/tileRenderer.js?v=2026.09.15.02"></script>
-<script src="js/game.js?v=2026.09.15.02"></script>
-<script src="js/ai.js?v=2026.09.15.02"></script>
-<script src="js/firebase.js?v=2026.09.15.02"></script>
+<script src="js/tiles.js?v=2026.09.16.01"></script>
+<script src="js/tileRenderer.js?v=2026.09.16.01"></script>
+<script src="js/game.js?v=2026.09.16.01"></script>
+<script src="js/ai.js?v=2026.09.16.01"></script>
+<script src="js/firebase.js?v=2026.09.16.01"></script>
 <script>
 'use strict';
 
@@ -612,7 +612,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.09.15.02';
+  const EXPECTED = '2026.09.16.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -722,9 +722,11 @@ function _isViewingHistory() {
  *   - an animation is running (animation code manages `state` directly)
  *   - a move is staged pending confirmation (_pendingMove !== null) — the
  *     staged postState lives in `state` but hasn't been pushed to history yet
+ *   - one or more setup placements are staged (_setupPending.length > 0) —
+ *     same reasoning as above, for the batched setup case
  *   - a staging animation is in progress (_stagingAnimation) */
 function _displayState() {
-  if (animating || _stagingAnimation || _pendingMove !== null) return state;
+  if (animating || _stagingAnimation || _pendingMove !== null || _setupPending.length > 0) return state;
   return _history.length > 0 ? _history[_viewIndex].state : state;
 }
 
@@ -896,6 +898,25 @@ let _pendingPreState = null;  // board state snapshot before the staged move
 let _pendingTimerId  = null;  // setInterval ID for auto-confirm countdown
 let _pendingSeconds  = 0;     // seconds remaining on the countdown
 
+// Setup-phase placements are batched: a player stages all 3 (Duke + 2
+// Footmen) before a single confirm, instead of confirming after each tile.
+// Separate from _pendingMove/_pendingPreState above, which remain
+// active-phase-only (move/strike/draw staging is unchanged).
+let _setupPending = [];  // [{ move, preState }, ...] — one entry per staged, unconfirmed tile
+
+/**
+ * True once the player's 3rd (final) setup tile has been staged. Gates the
+ * "Confirm" button and further clicks. Deliberately keyed on the staged
+ * move's absolute subStep (0=Duke, 1=Footman1, 2=Footman2), not
+ * _setupPending.length — after an idle-timeout auto-confirms a partial
+ * batch (see _confirmSetupBatch), the remaining tile(s) restart as a fresh,
+ * shorter batch that would never reach length 3 again.
+ */
+function _setupBatchReady() {
+  return _setupPending.length > 0
+    && _setupPending[_setupPending.length - 1].move.subStep === 2;
+}
+
 const PENDING_TIMEOUT = 60;   // seconds before auto-confirm fires
 
 function _startPendingTimer() {
@@ -1017,14 +1038,17 @@ function _boardFlipped() {
 }
 
 /**
- * Write the current state to Firestore after a move or setup placement.
+ * Write a state to Firestore after a move or setup placement.
  * Sets _ignoreNextSnapshot so our own write doesn't trigger a redundant update.
  * @param {object|null} move  The move (active phase) or null (setup placement).
+ * @param {object} [stateOverride]  State to write instead of the live global
+ *   `state` — needed when confirming a batch of staged setup placements,
+ *   where `state` already reflects later tiles that haven't been synced yet.
  */
-async function _syncToFirestore(move) {
+async function _syncToFirestore(move, stateOverride) {
   _ignoreNextSnapshot = true;
   try {
-    await writeGameState(_onlineCode, state, move ?? null);
+    await writeGameState(_onlineCode, stateOverride ?? state, move ?? null);
   } catch (e) {
     console.error('Firestore write failed:', e);
     _ignoreNextSnapshot = false;
@@ -1091,6 +1115,18 @@ function _onGameSnapshot(data) {
     });
   } else {
     // Setup placement — instant snap. Use real move data for timeline label if available.
+    //
+    // Setup batches confirm by writing several tiles in a tight sequential
+    // loop (_confirmSetupBatch), which can outrun _ignoreNextSnapshot's
+    // single-flag bookkeeping on the writer's OWN client (a stray echo of
+    // one of our own writes can slip through unignored). Guard the same way
+    // the active-phase branch above does with `turn`: skip if this snapshot
+    // doesn't represent progress beyond what's already applied locally —
+    // setupStep becomes null once phase flips to 'active', so treat that as
+    // "6" (fully done) for the comparison.
+    const progress = s => s.phase === 'active' ? 6 : s.setupStep;
+    if (progress(newState) <= progress(state)) return;
+
     const preState = state;
     state      = newState;
     _recordHistory(preState, newState, lastMove ?? { action: 'setup', pos: null, subStep: -1 });
@@ -1466,9 +1502,10 @@ function render() {
   }
 
   // Board border — gold when a move is staged, muted purple when browsing history
-  const browsing = _isViewingHistory();
-  ctx.strokeStyle = _pendingMove ? '#c8a020' : browsing ? '#3a2560' : '#5a3a80';
-  ctx.lineWidth   = _pendingMove ? 3 : 2;
+  const browsing    = _isViewingHistory();
+  const hasStaging  = _pendingMove !== null || _setupPending.length > 0;
+  ctx.strokeStyle = hasStaging ? '#c8a020' : browsing ? '#3a2560' : '#5a3a80';
+  ctx.lineWidth   = hasStaging ? 3 : 2;
   ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 }
 
@@ -1541,7 +1578,34 @@ function updateUI() {
 
   const p = state.currentPlayer;
 
-  // Pending: a piece/move has been staged, awaiting confirm/undo.
+  // Setup batch: 1-3 pieces staged, awaiting confirm/undo. Evaluated before
+  // the _pendingMove branch below since the two are mutually exclusive
+  // (setup uses _setupPending, active-phase moves use _pendingMove).
+  if (_setupPending.length > 0) {
+    const sp    = _setupPending[0].preState.currentPlayer;
+    // Absolute progress (1-3), not _setupPending.length — after an idle
+    // timeout auto-confirms a partial batch, the remaining tile(s) restart
+    // as a shorter batch but still represent tiles 2-3 or 3 of 3 overall.
+    const n     = _setupPending[_setupPending.length - 1].move.subStep + 1;
+    const ready = _setupBatchReady();
+    if (_onlineMode) {
+      playerEl.textContent = _myName || 'You';
+    } else {
+      playerEl.textContent = `Player ${sp + 1} (${PLAYER_NAMES[sp]})`;
+    }
+    playerEl.style.color = sp === 0 ? '#ede0c8' : '#c8a477';
+
+    msgEl.textContent = ready
+      ? 'All 3 pieces placed — confirm or undo the last.'
+      : n + ' of 3 placed — click a highlighted square, or undo.';
+    document.getElementById('undo-btn').textContent    = 'Undo Placement';
+    document.getElementById('confirm-btn').textContent = 'Confirm';
+    document.getElementById('confirm-btn').hidden       = !ready;
+    drawBtn.disabled = true;
+    return;
+  }
+
+  // Pending: an active-phase move has been staged, awaiting confirm/undo.
   // Evaluated before the setup/active branch so it intercepts both phases.
   // Use _pendingPreState.currentPlayer for the staging player — always correct,
   // unlike (1 - state.currentPlayer) which fails when currentPlayer doesn't
@@ -1558,14 +1622,12 @@ function updateUI() {
     if (_pendingMove.action === 'draw') {
       msgEl.textContent = 'Tile placed \u2014 confirm or choose a different square.';
       document.getElementById('undo-btn').textContent = 'Change Placement';
-    } else if (_pendingMove.action === 'setup') {
-      msgEl.textContent = 'Piece placed \u2014 confirm or undo.';
-      document.getElementById('undo-btn').textContent = 'Undo Placement';
     } else {
       msgEl.textContent = 'Move staged \u2014 confirm or undo.';
       document.getElementById('undo-btn').textContent = 'Undo Move';
     }
     document.getElementById('confirm-btn').textContent = 'Confirm';
+    document.getElementById('confirm-btn').hidden       = false;
     drawBtn.disabled = true;
     return;
   }
@@ -1698,8 +1760,11 @@ function handleClick(col, row) {
   }
 
   // ── Setup phase ─────────────────────────────────────────────────────────────
+  // Placements are batched: a player stages all 3 (Duke + 2 Footmen) before
+  // a single confirm, so clicks keep landing without an intermediate confirm
+  // until the batch is full — see _setupPending.
   if (state.phase === 'setup') {
-    if (_pendingMove !== null) return;  // staging: wait for confirm or undo
+    if (_setupBatchReady()) return;  // batch full: confirm or undo before continuing
     const info = getSetupInfo(state);
     // Block if AI is handling this placement or it isn't our turn online.
     if (!info) return;
@@ -1708,9 +1773,9 @@ function handleClick(col, row) {
 
     const isValid = info.targets.some(([tc, tr]) => tc === col && tr === row);
     if (isValid) {
-      _pendingPreState = state;
+      const preState = state;
       state = applySetupPlacement(state, col, row);
-      _pendingMove = { action: 'setup', pos: [col, row], subStep: info.subStep };
+      _setupPending.push({ move: { action: 'setup', pos: [col, row], subStep: info.subStep }, preState });
       document.getElementById('pending-controls').hidden = false;
       _startPendingTimer();
       render(); updateUI();
@@ -1839,10 +1904,79 @@ function commitMove(move) {
 // ─── Pending move: confirm and undo ──────────────────────────────────────────
 
 /**
+ * Commit every staged setup placement (1-3 tiles) as one batch: record one
+ * Timeline entry per tile (same granularity as before), sync each to
+ * Firestore in order if online, then hand off to the next player/AI once
+ * the trio (3rd tile) is complete.
+ *
+ * Fires on a manual "Confirm" click (only shown once all 3 tiles are
+ * staged) or on the 60s idle timeout, which may fire with fewer than 3
+ * staged — that's fine, the same player simply resumes with a fresh batch
+ * for the remaining tile(s), nothing is skipped.
+ */
+async function _confirmSetupBatch() {
+  _clearPendingTimer();
+  _clearDrawCommitted();
+  const batch = _setupPending;
+  _setupPending = [];
+  document.getElementById('pending-controls').hidden = true;
+
+  const startingPlayer = batch[0].preState.currentPlayer;
+  const finalState     = state;  // already reflects every staged tile
+
+  for (let i = 0; i < batch.length; i++) {
+    // Each tile's "post" state is the next tile's pre-state, or the live
+    // state for the last tile — never the ambient `state` directly, since
+    // by confirm time it already reflects later tiles that haven't synced
+    // yet (would otherwise leak them to the opponent's live view early).
+    const postState = i < batch.length - 1 ? batch[i + 1].preState : finalState;
+    _recordHistory(batch[i].preState, postState, batch[i].move);
+    if (_onlineMode) await _syncToFirestore(batch[i].move, postState);
+  }
+
+  if (finalState.currentPlayer === startingPlayer) {
+    // Idle timeout fired mid-batch — same player resumes, nothing to hand off yet.
+    render(); updateUI();
+    return;
+  }
+
+  if (finalState.phase === 'active') {
+    legalMoves = getLegalMoves(finalState);
+    if (!_onlineMode) triggerAI();
+  } else if (!_onlineMode) {
+    triggerAISetup();
+  }
+  render(); updateUI();
+}
+
+/**
+ * Pop the most recently staged setup placement and restore the board to
+ * just before it, so the player can pick a different square. Repeated
+ * clicks step back through the whole batch, most recent tile first.
+ */
+function undoSetupPlacement() {
+  _clearPendingTimer();
+  const entry = _setupPending.pop();
+  state = entry.preState;
+  resetUI();
+
+  if (_setupPending.length > 0) {
+    document.getElementById('pending-controls').hidden = false;
+    _startPendingTimer();
+  } else {
+    document.getElementById('pending-controls').hidden = true;
+  }
+  render(); updateUI();
+}
+
+/**
  * Commit the staged move: sync to Firestore / trigger AI, then clear pending.
- * Called when the player clicks "Confirm Move".
+ * Called when the player clicks "Confirm Move" (also used as the setup
+ * batch's "Confirm" — see _setupPending / _confirmSetupBatch above).
  */
 function submitTurn() {
+  if (_setupPending.length > 0) { _confirmSetupBatch(); return; }
+
   _clearPendingTimer();
   _clearDrawCommitted();
   const move     = _pendingMove;
@@ -1850,24 +1984,6 @@ function submitTurn() {
   _pendingMove     = null;
   _pendingPreState = null;
   document.getElementById('pending-controls').hidden = true;
-
-  if (move.action === 'setup') {
-    // Setup placement confirmed — record history, sync and hand off to AI / next step.
-    _recordHistory(preState, state, move);
-    if (_onlineMode) {
-      _syncToFirestore(move).catch(console.error);
-      if (state.phase === 'active') legalMoves = getLegalMoves(state);
-    } else {
-      if (state.phase === 'active') {
-        legalMoves = getLegalMoves(state);
-        triggerAI();
-      } else {
-        triggerAISetup();
-      }
-    }
-    render(); updateUI();
-    return;
-  }
 
   // Active-phase move confirmed.
   _recordHistory(preState, state, move);
@@ -1879,7 +1995,8 @@ function submitTurn() {
 
 /**
  * Revert the staged move. Called when the player clicks "Undo Move" /
- * "Change Placement".
+ * "Change Placement" / "Undo Placement" (also used as the setup batch's
+ * "Undo" — see _setupPending / undoSetupPlacement above).
  *
  * For draw placements: the tile has already been pulled from the bag (that
  * part is irreversible), so we restore to the pre-placement state and
@@ -1889,6 +2006,8 @@ function submitTurn() {
  * the player can choose a different action.
  */
 function undoMove() {
+  if (_setupPending.length > 0) { undoSetupPlacement(); return; }
+
   _clearPendingTimer();
   const wasDrawPlacement = _pendingMove && _pendingMove.action === 'draw';
   state            = _pendingPreState;
@@ -1951,12 +2070,13 @@ document.getElementById('cancel-btn').addEventListener('click', function () {
 document.getElementById('undo-btn').addEventListener('click', undoMove);
 document.getElementById('confirm-btn').addEventListener('click', submitTurn);
 
-// Double-click / double-tap on the board auto-confirms a staged move.
-// The first click of the pair stages the move (or is blocked if already pending);
-// the second click is swallowed by the _pendingMove guard in handleClick();
-// then dblclick fires here and commits.
+// Double-click / double-tap on the board auto-confirms a staged move (or a
+// full setup batch, once all 3 tiles are staged). The first click of the
+// pair stages the move/tile (or is blocked if already pending/batch full);
+// the second click is swallowed by the guard in handleClick(); then
+// dblclick fires here and commits.
 canvas.addEventListener('dblclick', function () {
-  if (_pendingMove !== null) submitTurn();
+  if (_pendingMove !== null || _setupBatchReady()) submitTurn();
 });
 
 function _resetForNewGame() {
@@ -1970,6 +2090,7 @@ function _resetForNewGame() {
   document.getElementById('pending-controls').hidden  = true;
   _pendingMove     = null;
   _pendingPreState = null;
+  _setupPending    = [];
   if (aiWorker) { aiWorker.terminate(); aiWorker = null; }
   aiThinking = false;
   document.getElementById('thinking').textContent = '';
@@ -2237,6 +2358,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.09.15.02</div>
+<div class="version">2026.09.16.01</div>
 </body>
 </html>
