@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.02
+ * @version 2026.10.16.03
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.02';
+const TILE_RENDERER_VERSION = '2026.10.16.03';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
@@ -83,6 +83,28 @@ function drawTile(ctx, x, y, size, type, side, player) {
   _drawIcons(ctx, x + L.gridX, y + L.gridY, L, type, side, C);
   _drawName(ctx, x + L.nameX, y + L.nameY, L.nameW, L.nameH, type, C);
   _drawIllustration(ctx, x + L.illX, y, L.illW, size, type, C);
+  _drawAbilityMark(ctx, x + L.illX, y, L.illW, size, type, side, C);
+}
+
+// ─── Enhanced-ability numeral ─────────────────────────────────────────────────
+//
+// Tiles with an enhanced ability carry a Roman numeral at the foot of the
+// illustration column: I = Summon, II = Divination.
+
+const _ABILITY_NUMERALS = { summon: 'I', divination: 'II' };
+
+function _drawAbilityMark(ctx, ix, iy, iw, size, type, side, C) {
+  const actions = (typeof TILES !== 'undefined') ? TILES[type]?.sides[side] : null;
+  const marker  = actions && actions.find(a => _ABILITY_NUMERALS[a.type]);
+  if (!marker) return;
+
+  ctx.save();
+  ctx.fillStyle    = C.line;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font         = `${size * 0.085}px 'MedievalSharp', Georgia, 'Times New Roman', serif`;
+  ctx.fillText(_ABILITY_NUMERALS[marker.type], ix + iw / 2, iy + size * 0.925);
+  ctx.restore();
 }
 
 // ─── Layout computation ───────────────────────────────────────────────────────
@@ -178,7 +200,9 @@ function _drawIcons(ctx, gx, gy, L, type, side, C) {
     // Derive grid cell from action coordinates.
     // sq/dir is [dc, dr]: dc positive = right, dr positive = forward (up on screen).
     // Grid 0-indexed: col = tileCol + dc, row = tileRow - dr.
-    const [dc, dr] = action.sq ?? action.dir;
+    const vec = action.sq ?? action.dir;
+    if (!vec) continue;   // passive ability markers (summon, divination) have no grid square
+    const [dc, dr] = vec;
     const col = tileCol + dc;
     const row = tileRow - dr;
     if (col < 0 || col > 4 || row < 0 || row > 4) continue;

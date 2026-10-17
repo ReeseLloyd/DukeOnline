@@ -510,6 +510,7 @@
 
     <div id="controls">
       <button id="draw-btn" disabled>Draw from Bag</button>
+      <button id="summon-btn" hidden title="Flip your Duke and bring a Duchess next to it">Summon Duchess</button>
       <button id="cancel-btn" hidden>Cancel</button>
     </div>
 
@@ -600,11 +601,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.16.02"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.02"></script>
-<script src="js/game.js?v=2026.10.16.02"></script>
-<script src="js/ai.js?v=2026.10.16.02"></script>
-<script src="js/firebase.js?v=2026.10.16.02"></script>
+<script src="js/tiles.js?v=2026.10.16.03"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.03"></script>
+<script src="js/game.js?v=2026.10.16.03"></script>
+<script src="js/ai.js?v=2026.10.16.03"></script>
+<script src="js/firebase.js?v=2026.10.16.03"></script>
 <script>
 'use strict';
 
@@ -612,7 +613,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.16.02';
+  const EXPECTED = '2026.10.16.03';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -645,6 +646,7 @@ const HIGHLIGHTS = {
   draw:       { fill: 'rgba(20,140,230,0.52)',  stroke: 'rgba(10,115,215,0.88)',  lw: 2 },
   'cmd-from': { fill: 'rgba(165,0,220,0.52)',   stroke: 'rgba(145,0,205,0.88)',   lw: 2 },
   'cmd-to':   { fill: 'rgba(225,120,0,0.56)',   stroke: 'rgba(210,100,0,0.88)',   lw: 2 },
+  summon:     { fill: 'rgba(0,170,170,0.52)',   stroke: 'rgba(0,140,140,0.88)',   lw: 2 },
 };
 
 // ─── History / timeline ───────────────────────────────────────────────────────
@@ -686,6 +688,12 @@ function _buildMoveLabel(preState, move) {
     const cell = preState.board[move.from[1]][move.from[0]];
     const name = cell ? tn(cell.type) : '?';
     return n + ' \u2014 ' + pw + ': ' + name + ' ' + _coordStr(move.from[0], move.from[1]) + ' \xd7 ' + _coordStr(move.target[0], move.target[1]);
+  }
+
+  if (move.action === 'summon') {
+    const cell = preState.board[move.from[1]][move.from[0]];
+    const name = cell ? tn(cell.type) : '?';
+    return n + ' — ' + pw + ': ' + name + ' summoned ' + _coordStr(move.from[0], move.from[1]) + ' → ' + _coordStr(move.to[0], move.to[1]);
   }
 
   if (move.action === 'command') {
@@ -1317,6 +1325,7 @@ function _getAnimPositions(move) {
   if (move.action === 'move')    return { from: move.from,  to: move.to     };
   if (move.action === 'strike')  return { from: move.from,  to: move.target };
   if (move.action === 'command') return { from: move.from,  to: move.to     };
+  if (move.action === 'summon')  return { from: move.from,  to: move.to     };
   if (move.action === 'draw')    return { from: move.pos,   to: move.pos    };
   return { from: null, to: null };
 }
@@ -1350,18 +1359,20 @@ function playMoveAnimation(preState, postState, move, onDone) {
 }
 
 // ─── UI state ─────────────────────────────────────────────────────────────────
-//   mode:       'idle' | 'selected' | 'cmd-to' | 'draw'
+//   mode:       'idle' | 'selected' | 'cmd-to' | 'draw' | 'summon-from' | 'summon-to'
 //   uiSelected: [c, r]  — selected tile (move / strike / command origin)
 //   uiCmdrPos:  [c, r]  — commander tile (while choosing commanded tile destination)
 //   uiCmdFrom:  [c, r]  — commanded tile's current square (while choosing destination)
+//   uiSummonFrom: [c, r] — Duchess being summoned (while choosing her destination)
 
 let uiMode     = 'idle';
 let uiSelected = null;
 let uiCmdrPos  = null;
 let uiCmdFrom  = null;
+let uiSummonFrom = null;
 
 function resetUI() {
-  uiMode = 'idle'; uiSelected = null; uiCmdrPos = null; uiCmdFrom = null;
+  uiMode = 'idle'; uiSelected = null; uiCmdrPos = null; uiCmdFrom = null; uiSummonFrom = null;
   document.getElementById('cancel-btn').hidden = true;
   document.getElementById('draw-preview').hidden = true;
   document.getElementById('flip-preview').hidden = true;
@@ -1437,6 +1448,21 @@ function computeHighlights() {
       if (m.action === 'command' && m.commander[0] === sc && m.commander[1] === sr)
         if (!h.has(cellKey(...m.from))) h.set(cellKey(...m.from), 'cmd-from');
     }
+    return h;
+  }
+
+  if (uiMode === 'summon-from') {
+    for (const m of legalMoves)
+      if (m.action === 'summon') h.set(cellKey(...m.from), 'cmd-from');
+    return h;
+  }
+
+  if (uiMode === 'summon-to' && uiSummonFrom) {
+    const [sc, sr] = uiSummonFrom;
+    h.set(cellKey(sc, sr), 'selected');
+    for (const m of legalMoves)
+      if (m.action === 'summon' && m.from[0] === sc && m.from[1] === sr)
+        h.set(cellKey(...m.to), 'summon');
     return h;
   }
 
@@ -1563,6 +1589,8 @@ function updateUI() {
   const playerEl = document.getElementById('status-player');
   const msgEl    = document.getElementById('status-msg');
   const drawBtn  = document.getElementById('draw-btn');
+  const summonBtn = document.getElementById('summon-btn');
+  summonBtn.hidden = true;   // re-shown below only on the active player's free turn
 
   // History browsing: show which turn we're viewing and lock all game controls.
   if (_isViewingHistory()) {
@@ -1743,6 +1771,10 @@ function updateUI() {
     msgEl.textContent = 'Choose a destination, or click elsewhere to cancel.';
   else if (uiMode === 'cmd-to')
     msgEl.textContent = 'Choose a destination for the commanded tile.';
+  else if (uiMode === 'summon-from')
+    msgEl.textContent = 'Choose the tile to summon.';
+  else if (uiMode === 'summon-to')
+    msgEl.textContent = 'Choose an open square next to your Duke (your Duke will flip).';
   else if (inGuard)
     msgEl.textContent = 'Your Duke is in Guard — you must resolve the threat.';
   else
@@ -1760,6 +1792,10 @@ function updateUI() {
     drawBtn.textContent = `Draw from Bag (${bagSize} left)`;
 
   drawBtn.disabled = !canDraw || uiMode !== 'idle' || isAiTurn;
+
+  // Summon button: only when a tile with the Summon ability has a legal summon.
+  summonBtn.hidden   = isAiTurn || !legalMoves.some(m => m.action === 'summon');
+  summonBtn.disabled = uiMode !== 'idle';
 }
 
 function showGameOver() {
@@ -1852,6 +1888,23 @@ function handleClick(col, row) {
     const m = legalMoves.find(m => m.action === 'draw' && m.pos[0] === col && m.pos[1] === row);
     if (m) { commitMove(m); }
     // No cancel: the player has committed to drawing this turn.
+    return;
+  }
+
+  // ── Summon: choose which Duchess, then where she lands ──────────────────────
+  if (uiMode === 'summon-from') {
+    const m = legalMoves.find(m => m.action === 'summon' && m.from[0] === col && m.from[1] === row);
+    if (m) { uiSummonFrom = [col, row]; enterMode('summon-to'); } else { resetUI(); }
+    render(); updateUI();
+    return;
+  }
+  if (uiMode === 'summon-to' && uiSummonFrom) {
+    const m = legalMoves.find(m =>
+      m.action === 'summon' &&
+      m.from[0] === uiSummonFrom[0] && m.from[1] === uiSummonFrom[1] &&
+      m.to[0] === col && m.to[1] === row
+    );
+    if (m) { commitMove(m); } else { resetUI(); render(); updateUI(); }
     return;
   }
 
@@ -2111,6 +2164,18 @@ document.getElementById('draw-btn').addEventListener('click', function () {
     document.getElementById('draw-preview').hidden = false;
   }
 
+  render(); updateUI();
+});
+
+document.getElementById('summon-btn').addEventListener('click', function () {
+  const froms = [];
+  for (const m of legalMoves) {
+    if (m.action === 'summon' && !froms.some(f => f[0] === m.from[0] && f[1] === m.from[1])) froms.push(m.from);
+  }
+  if (froms.length === 0) return;
+  document.getElementById('flip-preview').hidden = true;
+  if (froms.length === 1) { uiSummonFrom = froms[0]; enterMode('summon-to'); }
+  else                    { enterMode('summon-from'); }
   render(); updateUI();
 });
 
@@ -2421,6 +2486,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.16.02</div>
+<div class="version">2026.10.16.03</div>
 </body>
 </html>

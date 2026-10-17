@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.10.16.02
+ * @version 2026.10.16.03
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -36,6 +36,8 @@
  *   { action: 'strike',  from: [c,r], target: [c,r] }
  *   { action: 'command', commander: [c,r], from: [c,r], to: [c,r] }
  *   { action: 'draw',    pos: [c,r] }
+ *   { action: 'summon',  from: [c,r], to: [c,r] }   Duchess ability: flip own Duke, relocate
+ *                                                   the tile at `from` next to the Duke.
  *
  * ─── Coordinate system ────────────────────────────────────────────────────────
  *
@@ -52,7 +54,7 @@
 
 'use strict';
 
-const GAME_VERSION = '2026.10.16.02';
+const GAME_VERSION = '2026.10.16.03';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 
@@ -197,24 +199,30 @@ function _getRawLegalMoves(state) {
 
   const p     = state.currentPlayer;
   const moves = [];
+  const duke  = _findDuke(state.board, p);
 
   // ── Option A: Draw a tile from the bag ──────────────────────────────────────
-  if (state.bags[p].length > 0) {
-    const duke = _findDuke(state.board, p);
-    if (duke) {
-      for (const pos of _adjacentEmpty(state.board, duke[0], duke[1])) {
-        moves.push({ action: 'draw', pos });
-      }
+  if (state.bags[p].length > 0 && duke) {
+    for (const pos of _adjacentEmpty(state.board, duke[0], duke[1])) {
+      moves.push({ action: 'draw', pos });
     }
   }
 
   // ── Option B: Move, strike, or command an existing tile ────────────────────
+  // Also Option C: use an enhanced ability (Summon) of a tile on the board.
+  let summonDests = null;   // open Duke-adjacent squares, computed lazily
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
       const cell = state.board[r][c];
       if (!cell || cell.player !== p) continue;
       for (const m of _movesForTile(state.board, c, r, cell, p)) {
         moves.push(m);
+      }
+      if (tileHasAbility(cell.type, cell.side, 'summon') && duke) {
+        if (summonDests === null) summonDests = _adjacentEmpty(state.board, duke[0], duke[1]);
+        for (const to of summonDests) {
+          moves.push({ action: 'summon', from: [c, r], to });
+        }
       }
     }
   }
@@ -299,6 +307,16 @@ function _applyMoveCore(state, move) {
       next.phase  = 'gameover';
       next.winner = p;
     }
+
+  } else if (move.action === 'summon') {
+    // Summon: the Duke flips in place; the summoning tile jumps to an open
+    // Duke-adjacent square and keeps its current side. Never captures.
+    const [dc, dr] = _findDuke(next.board, p);
+    next.board[dr][dc] = { ...next.board[dr][dc], side: 1 - next.board[dr][dc].side };
+    const [fc, fr] = move.from;
+    const [tc, tr] = move.to;
+    next.board[tr][tc] = next.board[fr][fc];
+    next.board[fr][fc] = null;
 
   } else if (move.action === 'command') {
     const [cc, cr] = move.commander;
@@ -553,6 +571,8 @@ function _movesForTile(board, col, row, piece, player) {
   // ── Regular moves (move, jump, strike, slide, jumpSlide) ──────────────────
   for (const action of actions) {
     if (action.type === 'command') continue;  // already handled above
+    // Passive ability markers (no sq/dir) — handled in _getRawLegalMoves, not here.
+    if (action.type === 'summon' || action.type === 'divination') continue;
 
     if (action.type === 'slide' || action.type === 'jumpSlide') {
       // Normalize dir to a unit step, then apply player transform.

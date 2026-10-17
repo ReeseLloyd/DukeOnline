@@ -89,6 +89,8 @@ Fully playable. Online multiplayer, AI opponent, and hotseat mode all working. D
 
 [2026-10-16] Online game-over sync: `_onGameSnapshot` (game.html) previously dropped two game-ending snapshots on the opponent's client — a Duke capture (`_applyMoveCore` doesn't increment `turn` on game over, so the `turn <= state.turn` stale-snapshot guard rejected it) and a resignation (`lastMove: null` was treated as a setup placement). Fixed in the handler (`gameJustEnded` bypass; `_applyRemoteResign`) rather than changing the engine, so `turn` / `_seq` semantics stay unchanged. Verified with two live tabs.
 
+[2026-10-16] Duchess + Summon (2026.10.16.03). Rules per `reference/pdfs/The_Duke-Rulebook.pdf` (Enhanced Abilities): Summon is a turn option (alongside move / draw) — flip your own Duke in place and relocate a Duchess already on the board to an open orthogonally-adjacent square; she keeps her side; no capture. Implemented as move `{ action: 'summon', from, to }` generated in `_getRawLegalMoves` (not `_movesForTile`); tile sides carry passive ability markers `{ type: 'summon' }` / `{ type: 'divination' }` with no `sq`/`dir` (renderer and move generator skip them; renderer draws the Roman numeral I/II). `enhanced: true` now means "optional tile, excluded from the default bag" — `editableTileTypes()` includes enhanced tiles (so they appear in the bag editor), `defaultBagCounts()` excludes them. Tiles whose ability isn't built yet go in `UNRELEASED_TILES` (tiles.js) to stay out of bags and the editor. Duchess is drawn from the bag like any tile (default bag unchanged).
+
 ## Version Bump Checklist
 
 When bumping the version, update all of the following:

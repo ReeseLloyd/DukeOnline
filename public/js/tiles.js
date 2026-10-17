@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.02
+ * @version 2026.10.16.03
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -44,6 +44,17 @@
  *            in the display grid is not adjacent (e.g. dir [0, 2] places the icon
  *            at the top-center cell of a tile with tileGridPos [2, 2]).
  *
+ * summon     Roman numeral I. Passive ability marker (no sq/dir). Instead of moving
+ *            or drawing, the player may flip their Duke (it stays put) and take
+ *            a tile bearing this ability from anywhere on the board to an open
+ *            square orthogonally adjacent to the Duke; the tile keeps its side.
+ *            Not a Command move; cannot capture. (Duchess, both sides.)
+ *
+ * divination Roman numeral II. Passive ability marker (no sq/dir) on the Oracle's
+ *            non-starting side. The player may flip the tile back to its starting
+ *            side in place, then reveal three tiles from their bag, place one
+ *            adjacent to the Duke, and return or destroy each of the other two.
+ *
  * DATA SHAPE
  * ----------
  * Each tile entry:
@@ -61,7 +72,7 @@
  *
  */
 
-const TILES_VERSION = '2026.10.16.02';
+const TILES_VERSION = '2026.10.16.03';
 
 const TILES = {
 
@@ -485,7 +496,7 @@ const TILES = {
     count: 1,
     enhanced: true,
     sides: [
-      // Side 0
+      // Side 0 — ability I: Summon (both sides)
       [
         { type: 'move',    sq: [ 1,  0] },
         { type: 'move',    sq: [-1,  0] },
@@ -494,6 +505,7 @@ const TILES = {
         { type: 'command', sq: [-1,  0] },
         { type: 'command', sq: [ 1,  0] },
         { type: 'command', sq: [ 2,  0] },
+        { type: 'summon' },
       ],
       // Side 1
       [
@@ -504,6 +516,7 @@ const TILES = {
         { type: 'command', sq: [-1,  0] },
         { type: 'command', sq: [ 1,  0] },
         { type: 'command', sq: [ 2,  0] },
+        { type: 'summon' },
       ],
     ],
   },
@@ -537,22 +550,28 @@ const TILES = {
 // Bag customization limits.
 const BAG_MAX_PER_TYPE = 4;
 
+// Tiles whose special abilities are not implemented yet; kept out of bags and
+// the bag editor until they are.
+const UNRELEASED_TILES = ['oracle'];
+
 /**
  * Tile types a game creator may add to / remove from a bag, in TILES order.
- * The Duke is never in the bag; enhanced tiles stay hidden until their
- * special abilities are implemented.
+ * The Duke is never in the bag. Enhanced tiles (Duchess, Oracle) are
+ * editable but not part of the default bag.
  */
 function editableTileTypes() {
-  return Object.keys(TILES).filter(k => k !== 'duke' && !TILES[k].enhanced);
+  return Object.keys(TILES).filter(k => k !== 'duke' && !UNRELEASED_TILES.includes(k));
 }
 
 /**
  * The standard bag as a { type: count } map (bag copies only — startOnBoard
- * copies are placed during setup and are not part of the bag).
+ * copies are placed during setup and are not part of the bag). Enhanced
+ * tiles are optional and excluded.
  */
 function defaultBagCounts() {
   const counts = {};
   for (const key of editableTileTypes()) {
+    if (TILES[key].enhanced) continue;
     const n = TILES[key].count - (TILES[key].startOnBoard ?? 0);
     if (n > 0) counts[key] = n;
   }
@@ -617,6 +636,20 @@ function tileTotalCount(type, counts) {
   const onBoard = TILES[type].startOnBoard ?? 0;
   const inBag = (counts ?? defaultBagCounts())[type] ?? 0;
   return onBoard + inBag;
+}
+
+const _abilityCache = {};
+
+/**
+ * True if the given side of a tile carries the named ability marker
+ * ('summon', 'divination'). Memoized — called inside AI search loops.
+ */
+function tileHasAbility(type, side, name) {
+  const k = type + ':' + side + ':' + name;
+  if (!(k in _abilityCache)) {
+    _abilityCache[k] = !!TILES[type]?.sides[side]?.some(a => a.type === name);
+  }
+  return _abilityCache[k];
 }
 
 /**

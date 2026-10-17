@@ -448,7 +448,7 @@
       <button id="bag-mode-custom" class="seg-btn">Custom bag</button>
     </div>
     <div id="bag-editor" hidden>
-      <p class="info-msg">Both players draw from this bag. Everyone still starts with a Duke and two Footmen.</p>
+      <p class="info-msg">Both players draw from this bag. Everyone still starts with a Duke and two Footmen. Enhanced tiles have special abilities and are off by default.</p>
       <div id="bag-editor-list"></div>
       <div class="bag-editor-foot">
         <span id="bag-editor-total"></span>
@@ -474,17 +474,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
 <!-- Tile renderer for favicon -->
-<script src="js/tiles.js?v=2026.10.16.02"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.02"></script>
+<script src="js/tiles.js?v=2026.10.16.03"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.03"></script>
 
-<script src="js/firebase.js?v=2026.10.16.02"></script>
+<script src="js/firebase.js?v=2026.10.16.03"></script>
 
 <script>
 'use strict';
 
 // ─── Version check ────────────────────────────────────────────────────────────
 (function () {
-  const EXPECTED = '2026.10.16.02';
+  const EXPECTED = '2026.10.16.03';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && FIREBASE_VERSION      === EXPECTED;
@@ -904,7 +904,7 @@ function _buildBagEditor() {
 
     const name = document.createElement('span');
     name.className   = 'bag-name';
-    name.textContent = TILE_DISPLAY_NAMES[type] ?? type;
+    name.textContent = (TILE_DISPLAY_NAMES[type] ?? type) + (TILES[type].enhanced ? ' (enhanced)' : '');
 
     const minus = document.createElement('button');
     minus.className = 'bag-step-btn'; minus.textContent = '−';
@@ -1109,6 +1109,6 @@ if (_getUsername() && _getUserId()) {
 
 </script>
 
-<div class="version">2026.10.16.02</div>
+<div class="version">2026.10.16.03</div>
 </body>
 </html>
