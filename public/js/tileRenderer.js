@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.08
+ * @version 2026.10.16.09
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.08';
+const TILE_RENDERER_VERSION = '2026.10.16.09';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
@@ -61,6 +61,7 @@ const TILE_DISPLAY_NAMES = {
   swashbuckler: 'Swashbuckler',
   shieldmaiden: 'Shieldmaiden',
   lancer:     'Lancer',
+  specter:    'Specter',
 };
 
 // ─── Layout proportions (relative to tile size) ───────────────────────────────
@@ -227,6 +228,7 @@ function _drawIcons(ctx, gx, gy, L, type, side, C, player) {
       case 'strike':    _iconStrike(ctx, cx, cy, cellSize, C);                    break;
       case 'command':   _iconCommand(ctx, cx, cy, cellSize, C);                   break;
       case 'defense':   _iconDefense(ctx, cx, cy, cellSize, C);                   break;
+      case 'dread':     _iconDread(ctx, cx, cy, cellSize, C);                     break;
       case 'slide':     _iconArrow(ctx, cx, cy, cellSize, action.dir, true,  C);  break;
       case 'jumpSlide': _iconArrow(ctx, cx, cy, cellSize, action.dir, false, C);  break;
     }
@@ -258,6 +260,41 @@ function _iconJump(ctx, cx, cy, cs, C) {
   ctx.beginPath();
   ctx.arc(cx, cy, cs * 0.30, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+// Skull — Dread (freezes any non-immune tile standing on this square)
+function _iconDread(ctx, cx, cy, cs, C) {
+  const r      = cs * 0.27;
+  const headCY = cy - cs * 0.07;
+
+  ctx.fillStyle = C.line;
+  ctx.beginPath();
+  ctx.arc(cx, headCY, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Jaw
+  const jawW = r * 1.15;
+  const jawY = headCY + r * 0.55;
+  const jawH = cs * 0.17;
+  ctx.fillRect(cx - jawW / 2, jawY, jawW, jawH);
+
+  // Eye sockets, nose and tooth gaps cut out in the tile's background colour
+  ctx.fillStyle = C.bg;
+  for (const dx of [-0.38, 0.38]) {
+    ctx.beginPath();
+    ctx.arc(cx + r * dx, headCY - r * 0.05, r * 0.27, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.moveTo(cx,              headCY + r * 0.10);
+  ctx.lineTo(cx - r * 0.11,   headCY + r * 0.44);
+  ctx.lineTo(cx + r * 0.11,   headCY + r * 0.44);
+  ctx.closePath();
+  ctx.fill();
+  const gap = Math.max(0.8, cs * 0.025);
+  for (const dx of [-0.22, 0.22]) {
+    ctx.fillRect(cx + r * dx - gap / 2, jawY + jawH * 0.35, gap, jawH * 0.65);
+  }
 }
 
 // Solid square — Defense (marks a square an attacker cannot capture this tile from)
@@ -488,6 +525,7 @@ function _drawIllustration(ctx, ix, iy, iw, ih, type, C) {
     case 'swashbuckler': _illRapier(ctx, C);      break;
     case 'shieldmaiden': _illShieldSword(ctx, C); break;
     case 'lancer':     _illSpearhead(ctx, C);     break;
+    case 'specter':    _illScythe(ctx, C);        break;
     default:           _illPole(ctx, C);          break;
   }
 
@@ -805,6 +843,32 @@ function _illCrown(ctx, C) {
   ctx.lineTo(cx + w / 2,   cBot);
   ctx.closePath();
   ctx.fill();
+}
+
+// Scythe: a long curved blade sweeping off the top of a shaft (Specter)
+function _illScythe(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  const shaftX = cx + w * 0.14;
+  const shaftW = w * 0.12;
+
+  ctx.fillStyle = C.line;
+
+  // Shaft
+  ctx.fillRect(shaftX - shaftW / 2, top + h * 0.04, shaftW, bot - (top + h * 0.04));
+
+  // Blade: crescent sweeping left and down from the shaft top
+  ctx.beginPath();
+  ctx.moveTo(shaftX,             top);
+  ctx.quadraticCurveTo(cx - w * 0.55, top + h * 0.10, cx - w * 0.48, top + h * 0.40);
+  ctx.quadraticCurveTo(cx - w * 0.28, top + h * 0.16, shaftX - shaftW / 2, top + h * 0.16);
+  ctx.closePath();
+  ctx.fill();
+
+  // Two short grips on the shaft
+  ctx.fillRect(shaftX, top + h * 0.42, w * 0.16, h * 0.022);
+  ctx.fillRect(shaftX, top + h * 0.74, w * 0.16, h * 0.022);
 }
 
 // Long tapering lance head on a short stem (Lancer)

@@ -643,11 +643,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.16.08"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.08"></script>
-<script src="js/game.js?v=2026.10.16.08"></script>
-<script src="js/ai.js?v=2026.10.16.08"></script>
-<script src="js/firebase.js?v=2026.10.16.08"></script>
+<script src="js/tiles.js?v=2026.10.16.09"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.09"></script>
+<script src="js/game.js?v=2026.10.16.09"></script>
+<script src="js/ai.js?v=2026.10.16.09"></script>
+<script src="js/firebase.js?v=2026.10.16.09"></script>
 <script>
 'use strict';
 
@@ -655,7 +655,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.16.08';
+  const EXPECTED = '2026.10.16.09';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -1663,6 +1663,7 @@ function render() {
   const hi      = computeHighlights();
   const flipped = _boardFlipped();
   const ds      = _displayState();   // historical or live board state
+  const frozen  = getFrozenSquares(ds);   // Dread: tiles that cannot act or be captured
 
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
@@ -1689,6 +1690,15 @@ function render() {
         } else {
           drawTile(ctx, x, sy, cellSz, cell.type, cell.side, cell.player);
         }
+      }
+
+      // Frozen tiles (Dread): icy tint so it's clear why they can't be selected or captured
+      if (cell && frozen.has(cellKey(c, r))) {
+        ctx.fillStyle = 'rgba(110, 160, 255, 0.30)';
+        ctx.fillRect(x, sy, cellSz, cellSz);
+        ctx.strokeStyle = 'rgba(150, 190, 255, 0.85)';
+        ctx.lineWidth   = 2;
+        ctx.strokeRect(x + 1, sy + 1, cellSz - 2, cellSz - 2);
       }
 
       // Highlight overlay (drawn on top of tile so it's always visible)
@@ -2711,6 +2721,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.16.08</div>
+<div class="version">2026.10.16.09</div>
 </body>
 </html>

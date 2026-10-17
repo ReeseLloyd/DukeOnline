@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.08
+ * @version 2026.10.16.09
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -50,6 +50,12 @@
  *            to this tile, in its owner's frame). Command ignores Defense. See
  *            _defenseBlocks in game.js for the jump/strike routing rules.
  *
+ * dread      Skull. Passive marker: every tile (friendly or enemy) standing on a
+ *            marked square is frozen — it cannot move, be captured, be shifted
+ *            by Command, or use abilities — while the icon covers it. Dukes and
+ *            tiles bearing a Dread icon are immune. See _computeFrozenSquares
+ *            in game.js.
+ *
  * summon     Roman numeral I. Passive ability marker (no sq/dir). Instead of moving
  *            or drawing, the player may flip their Duke (it stays put) and take
  *            a tile bearing this ability from anywhere on the board to an open
@@ -84,7 +90,7 @@
  *
  */
 
-const TILES_VERSION = '2026.10.16.08';
+const TILES_VERSION = '2026.10.16.09';
 
 const TILES = {
 
@@ -581,6 +587,35 @@ const TILES = {
         { type: 'jump', sq: [-1, -2] },
         { type: 'jump', sq: [ 0, -2] },
         { type: 'jump', sq: [ 1, -2] },
+      ],
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
+  // SPECTER  (promo tile — optional, not in the default bag). Treated as an
+  // ordinary bag tile owned by whoever draws it (not the Events sheet's neutral
+  // piece with a Token). Both faces are identical: step forward, and skulls
+  // (Dread) on the two side squares and the three squares behind.
+  // ---------------------------------------------------------------------------
+  specter: {
+    count: 1,
+    promo: true,
+    sides: [
+      [
+        { type: 'move',  sq: [ 0,  1] },
+        { type: 'dread', sq: [-1,  0] },
+        { type: 'dread', sq: [ 1,  0] },
+        { type: 'dread', sq: [-1, -1] },
+        { type: 'dread', sq: [ 0, -1] },
+        { type: 'dread', sq: [ 1, -1] },
+      ],
+      [
+        { type: 'move',  sq: [ 0,  1] },
+        { type: 'dread', sq: [-1,  0] },
+        { type: 'dread', sq: [ 1,  0] },
+        { type: 'dread', sq: [-1, -1] },
+        { type: 'dread', sq: [ 0, -1] },
+        { type: 'dread', sq: [ 1, -1] },
       ],
     ],
   },

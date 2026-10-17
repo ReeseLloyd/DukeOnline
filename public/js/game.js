@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.10.16.08
+ * @version 2026.10.16.09
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -60,7 +60,7 @@
 
 'use strict';
 
-const GAME_VERSION = '2026.10.16.08';
+const GAME_VERSION = '2026.10.16.09';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 
@@ -218,15 +218,17 @@ function _getRawLegalMoves(state, aiPrune) {
   // Also Option C: use an enhanced ability (Summon / Divination) of a tile on
   // the board. Both place a tile on an open Duke-adjacent square.
   let adjDests = null;   // open Duke-adjacent squares, computed lazily
-  const bag = state.bags[p];
+  const bag    = state.bags[p];
+  const frozen = _computeFrozenSquares(state.board);
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
       const cell = state.board[r][c];
       if (!cell || cell.player !== p) continue;
-      for (const m of _movesForTile(state.board, c, r, cell, p)) {
+      for (const m of _movesForTile(state.board, c, r, cell, p, frozen)) {
         moves.push(m);
       }
       if (!duke) continue;
+      if (frozen.has(c + ',' + r)) continue;   // Dread: a frozen tile cannot use abilities
 
       if (tileHasAbility(cell.type, cell.side, 'summon')) {
         if (adjDests === null) adjDests = _adjacentEmpty(state.board, duke[0], duke[1]);
@@ -512,7 +514,7 @@ function _pathClear(board, fromC, fromR, toC, toR) {
  * jumpSlide: the first square in the direction is skipped (jumped over, regardless
  * of occupancy); sliding resumes from the second square.
  */
-function _resolveSlide(board, col, row, bdc, bdr, player, isJumpSlide) {
+function _resolveSlide(board, col, row, bdc, bdr, player, isJumpSlide, frozen) {
   const targets = [];
   let c = col + bdc;
   let r = row + bdr;
@@ -528,7 +530,8 @@ function _resolveSlide(board, col, row, bdc, bdr, player, isJumpSlide) {
     if (cell === null) {
       targets.push([c, r]);
     } else if (cell.player !== player) {
-      targets.push([c, r]);   // capture and stop
+      // A frozen enemy (Dread) cannot be captured and blocks the slide.
+      if (!(frozen && frozen.has(c + ',' + r))) targets.push([c, r]);   // capture and stop
       break;
     } else {
       break;                  // friendly — blocked, stop before
@@ -577,12 +580,13 @@ function _isDukeThreatenedBy(board, attackedPlayer) {
   const dukePos  = _findDuke(board, attackedPlayer);
   if (!dukePos) return true;   // Duke already gone — treat as threatened
   const [dc, dr] = dukePos;
+  const frozen   = _computeFrozenSquares(board);   // frozen attackers threaten nothing
 
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
       const cell = board[r][c];
       if (!cell || cell.player !== attacker) continue;
-      for (const m of _movesForTile(board, c, r, cell, attacker)) {
+      for (const m of _movesForTile(board, c, r, cell, attacker, frozen)) {
         if (m.action === 'move'    && m.to[0]     === dc && m.to[1]     === dr) return true;
         if (m.action === 'strike'  && m.target[0] === dc && m.target[1] === dr) return true;
         if (m.action === 'command' && m.to[0]     === dc && m.to[1]     === dr) return true;
@@ -590,6 +594,53 @@ function _isDukeThreatenedBy(board, attackedPlayer) {
     }
   }
   return false;
+}
+
+// ─── Internal: Dread ─────────────────────────────────────────────────────────
+//
+// Rulebook: any tile (friendly or enemy) in a square covered by a Dread icon is
+// frozen — it cannot move, be captured, be shifted by Command, or use any
+// ability — for as long as the icon still covers it, so it is derived from the
+// current board every time rather than stored. Dukes and any tile type bearing
+// a Dread icon are immune to Dread (they can still be captured normally).
+
+const _NO_FROZEN = new Set();   // shared empty result — never mutated
+
+function _dreadImmune(type) {
+  return type === 'duke' || tileHasAbility(type, 0, 'dread') || tileHasAbility(type, 1, 'dread');
+}
+
+/**
+ * Set of "col,row" strings for every frozen tile on the board.
+ * Returns the shared empty set immediately when no Dread tile is in play.
+ */
+function _computeFrozenSquares(board) {
+  let covered = null;   // flat [c, r, c, r, ...] of squares covered by Dread icons
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      const cell = board[r][c];
+      if (!cell || !tileHasAbility(cell.type, cell.side, 'dread')) continue;
+      for (const a of getTileActions(cell.type, cell.side, cell.player)) {
+        if (a.type !== 'dread') continue;
+        const [bdc, bdr] = _transform(cell.player, a.sq[0], a.sq[1]);
+        const tc = c + bdc, tr = r + bdr;
+        if (_inBounds(tc, tr)) (covered ??= []).push(tc, tr);
+      }
+    }
+  }
+  if (covered === null) return _NO_FROZEN;
+
+  const frozen = new Set();
+  for (let i = 0; i < covered.length; i += 2) {
+    const t = board[covered[i + 1]][covered[i]];
+    if (t && !_dreadImmune(t.type)) frozen.add(covered[i] + ',' + covered[i + 1]);
+  }
+  return frozen;
+}
+
+/** Frozen squares ("col,row" strings) for a game state — for UI overlays. */
+function getFrozenSquares(state) {
+  return _computeFrozenSquares(state.board);
 }
 
 // ─── Internal: Defense ───────────────────────────────────────────────────────
@@ -674,7 +725,11 @@ function _defenseBlocks(board, ac, ar, tc, tr) {
  * @param {number} player  Current player (same as piece.player).
  * @returns {Array}  Move objects.
  */
-function _movesForTile(board, col, row, piece, player) {
+function _movesForTile(board, col, row, piece, player, frozen) {
+  if (frozen === undefined) frozen = _computeFrozenSquares(board);
+  const isFrozen = (c, r) => frozen.size > 0 && frozen.has(c + ',' + r);
+  if (isFrozen(col, row)) return [];   // Dread: a frozen tile cannot move, strike or command
+
   const moves   = [];
   const actions = getTileActions(piece.type, piece.side, player);
 
@@ -692,13 +747,14 @@ function _movesForTile(board, col, row, piece, player) {
   // Any friendly tile sitting on a command square can be moved to any other
   // command square that isn't occupied by a friendly.
   if (commandSqs.length > 0) {
+    // Frozen tiles cannot be shifted by Command, nor captured by it.
     const sources = commandSqs.filter(([c, r]) => {
       const cell = board[r][c];
-      return cell && cell.player === player;
+      return cell && cell.player === player && !isFrozen(c, r);
     });
     const dests = commandSqs.filter(([c, r]) => {
       const cell = board[r][c];
-      return !cell || cell.player !== player;
+      return !cell || (cell.player !== player && !isFrozen(c, r));
     });
 
     for (const from of sources) {
@@ -713,8 +769,10 @@ function _movesForTile(board, col, row, piece, player) {
   for (const action of actions) {
     if (action.type === 'command') continue;  // already handled above
     // Passive markers — summon/divination are handled in _getRawLegalMoves;
-    // defense is read from the *target* tile in _defenseBlocks. Not moves.
-    if (action.type === 'summon' || action.type === 'divination' || action.type === 'defense') continue;
+    // defense is read from the *target* tile in _defenseBlocks; dread in
+    // _computeFrozenSquares. Not moves.
+    if (action.type === 'summon' || action.type === 'divination' ||
+        action.type === 'defense' || action.type === 'dread') continue;
 
     if (action.type === 'slide' || action.type === 'jumpSlide') {
       // Normalize dir to a unit step, then apply player transform.
@@ -725,7 +783,7 @@ function _movesForTile(board, col, row, piece, player) {
         Math.sign(action.dir[0]),
         Math.sign(action.dir[1])
       );
-      const targets = _resolveSlide(board, col, row, bdc, bdr, player, action.type === 'jumpSlide');
+      const targets = _resolveSlide(board, col, row, bdc, bdr, player, action.type === 'jumpSlide', frozen);
       for (const [tc, tr] of targets) {
         if (board[tr][tc] && _defenseBlocks(board, col, row, tc, tr)) continue;
         moves.push({ action: 'move', from: [col, row], to: [tc, tr] });
@@ -737,7 +795,8 @@ function _movesForTile(board, col, row, piece, player) {
       const tr = row + bdr;
       if (!_inBounds(tc, tr)) continue;
       const target = board[tr][tc];
-      if (target && target.player !== player && !_defenseBlocks(board, col, row, tc, tr)) {
+      if (target && target.player !== player && !isFrozen(tc, tr) &&
+          !_defenseBlocks(board, col, row, tc, tr)) {
         moves.push({ action: 'strike', from: [col, row], target: [tc, tr] });
       }
 
@@ -749,6 +808,7 @@ function _movesForTile(board, col, row, piece, player) {
       if (!_inBounds(tc, tr)) continue;
       const target = board[tr][tc];
       if (target && target.player === player) continue;  // friendly blocks
+      if (target && isFrozen(tc, tr)) continue;                          // frozen tiles cannot be captured
       if (target && _defenseBlocks(board, col, row, tc, tr)) continue;  // capture blocked by Defense
 
       if (action.type === 'jump') {
