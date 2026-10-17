@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.10.16.03
+ * @version 2026.10.16.04
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -38,7 +38,13 @@
  *   { action: 'draw',    pos: [c,r] }
  *   { action: 'summon',  from: [c,r], to: [c,r] }   Duchess ability: flip own Duke, relocate
  *                                                   the tile at `from` next to the Duke.
+ *   { action: 'divine',  from: [c,r], pick: i, pos: [c,r], destroy: [i,...] }
+ *                                      Oracle ability: flip the Oracle at `from`, reveal the
+ *                                      top 3 of the bag, place revealed[pick] at `pos`; the
+ *                                      other revealed tiles listed in `destroy` are removed,
+ *                                      the rest return to the bag (reshuffled deterministically).
  *
+
  * ─── Coordinate system ────────────────────────────────────────────────────────
  *
  *   Board positions:  [col, row], col 0–5 left→right, row 0–5 player0-back→player1-back.
@@ -54,7 +60,7 @@
 
 'use strict';
 
-const GAME_VERSION = '2026.10.16.03';
+const GAME_VERSION = '2026.10.16.04';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 
@@ -194,7 +200,7 @@ function applySetupPlacement(state, col, row) {
  * @param {object} state
  * @returns {Array}  Array of move objects.
  */
-function _getRawLegalMoves(state) {
+function _getRawLegalMoves(state, aiPrune) {
   if (state.phase !== 'active') return [];
 
   const p     = state.currentPlayer;
@@ -209,8 +215,10 @@ function _getRawLegalMoves(state) {
   }
 
   // ── Option B: Move, strike, or command an existing tile ────────────────────
-  // Also Option C: use an enhanced ability (Summon) of a tile on the board.
-  let summonDests = null;   // open Duke-adjacent squares, computed lazily
+  // Also Option C: use an enhanced ability (Summon / Divination) of a tile on
+  // the board. Both place a tile on an open Duke-adjacent square.
+  let adjDests = null;   // open Duke-adjacent squares, computed lazily
+  const bag = state.bags[p];
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 6; c++) {
       const cell = state.board[r][c];
@@ -218,11 +226,18 @@ function _getRawLegalMoves(state) {
       for (const m of _movesForTile(state.board, c, r, cell, p)) {
         moves.push(m);
       }
-      if (tileHasAbility(cell.type, cell.side, 'summon') && duke) {
-        if (summonDests === null) summonDests = _adjacentEmpty(state.board, duke[0], duke[1]);
-        for (const to of summonDests) {
+      if (!duke) continue;
+
+      if (tileHasAbility(cell.type, cell.side, 'summon')) {
+        if (adjDests === null) adjDests = _adjacentEmpty(state.board, duke[0], duke[1]);
+        for (const to of adjDests) {
           moves.push({ action: 'summon', from: [c, r], to });
         }
+      }
+
+      if (bag.length > 0 && tileHasAbility(cell.type, cell.side, 'divination')) {
+        if (adjDests === null) adjDests = _adjacentEmpty(state.board, duke[0], duke[1]);
+        _pushDivineMoves(moves, [c, r], bag.slice(0, 3), adjDests, aiPrune);
       }
     }
   }
@@ -231,15 +246,57 @@ function _getRawLegalMoves(state) {
 }
 
 /**
+ * Append every Divination move for the Oracle at `from`.
+ *
+ * `revealed` is the top (up to) 3 tiles of the player's bag. The player picks
+ * one to place on an open Duke-adjacent square (`dests`); each of the others is
+ * independently returned to the bag or destroyed (`destroy` = indices into
+ * `revealed`). With aiPrune, only "return everything" moves are produced and
+ * picks of the same tile type are collapsed.
+ */
+function _pushDivineMoves(moves, from, revealed, dests, aiPrune) {
+  const seenTypes = new Set();
+  for (let pick = 0; pick < revealed.length; pick++) {
+    if (aiPrune) {
+      if (seenTypes.has(revealed[pick])) continue;
+      seenTypes.add(revealed[pick]);
+    }
+    const others = [];
+    for (let i = 0; i < revealed.length; i++) if (i !== pick) others.push(i);
+
+    // Every subset of the other tiles to destroy (bitmask over `others`).
+    const subsetCount = aiPrune ? 1 : 1 << others.length;
+    for (let mask = 0; mask < subsetCount; mask++) {
+      const destroy = others.filter((_, k) => mask & (1 << k));
+      for (const pos of dests) {
+        moves.push({ action: 'divine', from, pick, pos, destroy });
+      }
+    }
+  }
+}
+
+/**
+ * Deterministic reshuffle used by Divination: both clients (and a history
+ * replay) derive the same order from the game seed, turn number and player.
+ */
+function _reshuffleBag(tiles, seed, turn, player) {
+  const mixed = ((seed | 0) ^ Math.imul(turn + 1, 0x9E3779B1) ^ Math.imul(player + 1, 0x85EBCA6B)) >>> 0;
+  return _shuffle(tiles.slice(), _mulberry32(mixed));
+}
+
+/**
  * Return all legal moves for state.currentPlayer, excluding any move that
  * would leave the current player's Duke exposed to capture ("in Guard").
  * @param {object} state
+ * @param {boolean} [aiPrune]  AI search only: generate a reduced set of Divination
+ *   moves (no destroying, duplicate tile types collapsed) to limit branching.
+ *   The UI and rules checks always use the full set.
  * @returns {Array}  Array of move objects.
  */
-function getLegalMoves(state) {
+function getLegalMoves(state, aiPrune) {
   if (state.phase !== 'active') return [];
   const p   = state.currentPlayer;
-  const raw = _getRawLegalMoves(state);
+  const raw = _getRawLegalMoves(state, aiPrune);
   return raw.filter(function (move) {
     const next = _applyMoveCore(state, move);
     if (next.phase === 'gameover') return true;   // winning move — always legal
@@ -317,6 +374,19 @@ function _applyMoveCore(state, move) {
     const [tc, tr] = move.to;
     next.board[tr][tc] = next.board[fr][fc];
     next.board[fr][fc] = null;
+
+  } else if (move.action === 'divine') {
+    // Divination: the Oracle flips in place; three tiles are revealed from the
+    // top of the bag; the picked one is placed (starting side) and each other
+    // is returned (bag is then reshuffled) or destroyed.
+    const [oc, or] = move.from;
+    next.board[or][oc] = { ...next.board[or][oc], side: 1 - next.board[or][oc].side };
+    const bag      = next.bags[p];
+    const revealed = bag.splice(0, Math.min(3, bag.length));
+    const picked   = revealed[move.pick];
+    const returned = revealed.filter((_, i) => i !== move.pick && !move.destroy.includes(i));
+    next.bags[p] = _reshuffleBag(bag.concat(returned), next.seed, next.turn, p);
+    next.board[move.pos[1]][move.pos[0]] = { type: picked, player: p, side: 0 };
 
   } else if (move.action === 'command') {
     const [cc, cr] = move.commander;

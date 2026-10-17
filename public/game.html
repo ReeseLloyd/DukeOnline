@@ -205,6 +205,42 @@
       opacity: 0.70;
     }
 
+    /* ── Divination reveal ──────────────────────────────────────────────────── */
+
+    #divine-preview {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #7a50a0;
+      border-radius: 6px;
+      padding: 10px 16px;
+      max-width: 100%;
+    }
+
+    #divine-preview[hidden] { display: none; }
+
+    #divine-cards { display: flex; gap: 10px; justify-content: center; }
+
+    .divine-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 6px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .divine-card.picked { border-color: #c8a020; background: rgba(200, 160, 32, 0.12); }
+    .divine-card canvas { width: 72px; height: 72px; }
+    .divine-name { font-size: 0.78rem; }
+    .divine-toggle { padding: 2px 10px; font-size: 0.72rem; }
+    .divine-toggle.destroy { background: #6a1a1a; border-color: #c04040; }
+
+    #divine-hint { font-size: 0.82rem; opacity: 0.75; text-align: center; }
+
     /* ── Flip-side preview ──────────────────────────────────────────────────── */
 
     #flip-preview {
@@ -511,6 +547,7 @@
     <div id="controls">
       <button id="draw-btn" disabled>Draw from Bag</button>
       <button id="summon-btn" hidden title="Flip your Duke and bring a Duchess next to it">Summon Duchess</button>
+      <button id="divine-btn" hidden title="Flip the Oracle, reveal three tiles from your bag and place one">Divination</button>
       <button id="cancel-btn" hidden>Cancel</button>
     </div>
 
@@ -540,6 +577,11 @@
         <div id="draw-tile-name"></div>
         <div id="draw-tile-hint">Click a highlighted square to place it.</div>
       </div>
+    </div>
+
+    <div id="divine-preview" hidden>
+      <div id="divine-cards"></div>
+      <div id="divine-hint"></div>
     </div>
   </div><!-- #board-column -->
 
@@ -601,11 +643,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.16.03"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.03"></script>
-<script src="js/game.js?v=2026.10.16.03"></script>
-<script src="js/ai.js?v=2026.10.16.03"></script>
-<script src="js/firebase.js?v=2026.10.16.03"></script>
+<script src="js/tiles.js?v=2026.10.16.04"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.04"></script>
+<script src="js/game.js?v=2026.10.16.04"></script>
+<script src="js/ai.js?v=2026.10.16.04"></script>
+<script src="js/firebase.js?v=2026.10.16.04"></script>
 <script>
 'use strict';
 
@@ -613,7 +655,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.16.03';
+  const EXPECTED = '2026.10.16.04';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -688,6 +730,15 @@ function _buildMoveLabel(preState, move) {
     const cell = preState.board[move.from[1]][move.from[0]];
     const name = cell ? tn(cell.type) : '?';
     return n + ' \u2014 ' + pw + ': ' + name + ' ' + _coordStr(move.from[0], move.from[1]) + ' \xd7 ' + _coordStr(move.target[0], move.target[1]);
+  }
+
+  if (move.action === 'divine') {
+    // The revealed tiles are the top of the mover's bag in the pre-move state.
+    const revealed = preState.bags[p].slice(0, 3);
+    const placed   = tn(revealed[move.pick]);
+    const gone     = move.destroy.map(i => tn(revealed[i]));
+    return n + ' — ' + pw + ': Oracle divines → ' + placed + ' ' + _coordStr(move.pos[0], move.pos[1])
+      + (gone.length ? ' (destroyed ' + gone.join(', ') + ')' : '');
   }
 
   if (move.action === 'summon') {
@@ -959,9 +1010,10 @@ function _updateCountdown() {
 // restore draw mode so they can't escape the obligation.
 // The flag is keyed by game code + turn number so stale flags are ignored.
 
-function _saveDrawCommitted() {
+// `extra` marks a committed Divination ("col,row" of the Oracle); absent = a draw.
+function _saveDrawCommitted(extra) {
   if (!_onlineMode) return;
-  localStorage.setItem('duke_draw_' + _onlineCode, state.turn.toString());
+  localStorage.setItem('duke_draw_' + _onlineCode, state.turn + (extra ? ':' + extra : ''));
 }
 
 function _clearDrawCommitted() {
@@ -977,7 +1029,18 @@ function _clearDrawCommitted() {
 function _checkRestoreDrawMode() {
   if (!_onlineMode || state.phase !== 'active' || !_isMyTurn() || _pendingMove !== null) return;
   const saved = localStorage.getItem('duke_draw_' + _onlineCode);
-  if (saved === null || parseInt(saved) !== state.turn) return;
+  if (saved === null) return;
+  const [turnStr, divineAt] = saved.split(':');
+  if (parseInt(turnStr) !== state.turn) return;
+
+  if (divineAt) {
+    // Committed Divination: re-reveal the same three tiles (deterministic from the bag).
+    const from = divineAt.split(',').map(Number);
+    if (legalMoves.some(m => m.action === 'divine' && m.from[0] === from[0] && m.from[1] === from[1])) {
+      _enterDivine(from);
+    }
+    return;
+  }
 
   enterMode('draw');
   const p    = state.currentPlayer;
@@ -1326,6 +1389,7 @@ function _getAnimPositions(move) {
   if (move.action === 'strike')  return { from: move.from,  to: move.target };
   if (move.action === 'command') return { from: move.from,  to: move.to     };
   if (move.action === 'summon')  return { from: move.from,  to: move.to     };
+  if (move.action === 'divine')  return { from: move.from,  to: move.pos    };
   if (move.action === 'draw')    return { from: move.pos,   to: move.pos    };
   return { from: null, to: null };
 }
@@ -1360,6 +1424,7 @@ function playMoveAnimation(preState, postState, move, onDone) {
 
 // ─── UI state ─────────────────────────────────────────────────────────────────
 //   mode:       'idle' | 'selected' | 'cmd-to' | 'draw' | 'summon-from' | 'summon-to'
+//               | 'divine-from' | 'divine'
 //   uiSelected: [c, r]  — selected tile (move / strike / command origin)
 //   uiCmdrPos:  [c, r]  — commander tile (while choosing commanded tile destination)
 //   uiCmdFrom:  [c, r]  — commanded tile's current square (while choosing destination)
@@ -1370,11 +1435,19 @@ let uiSelected = null;
 let uiCmdrPos  = null;
 let uiCmdFrom  = null;
 let uiSummonFrom = null;
+//   uiDivineFrom:    [c, r]  — Oracle being used (Divination)
+//   uiDivinePick:    index (0-2) of the revealed tile to place, or null until chosen
+//   uiDivineDestroy: Set of revealed indices to destroy (the rest are returned to the bag)
+let uiDivineFrom    = null;
+let uiDivinePick    = null;
+let uiDivineDestroy = new Set();
 
 function resetUI() {
   uiMode = 'idle'; uiSelected = null; uiCmdrPos = null; uiCmdFrom = null; uiSummonFrom = null;
+  uiDivineFrom = null; uiDivinePick = null; uiDivineDestroy = new Set();
   document.getElementById('cancel-btn').hidden = true;
   document.getElementById('draw-preview').hidden = true;
+  document.getElementById('divine-preview').hidden = true;
   document.getElementById('flip-preview').hidden = true;
 }
 
@@ -1410,8 +1483,92 @@ function _showFlipPreview(col, row, hint) {
 function enterMode(mode) {
   uiMode = mode;
   // Cancel is suppressed in draw mode: once "Draw from Bag" is clicked the
-  // player has committed to placing the tile (per the rules).
-  document.getElementById('cancel-btn').hidden = (mode === 'idle' || mode === 'draw');
+  // player has committed to placing the tile (per the rules). Same for
+  // Divination once the three tiles have been revealed.
+  document.getElementById('cancel-btn').hidden = (mode === 'idle' || mode === 'draw' || mode === 'divine');
+}
+
+// ─── Divination (Oracle) ──────────────────────────────────────────────────────
+
+/**
+ * Reveal the top three tiles of the current player's bag and let them choose
+ * which to place and which of the others to return or destroy. Entering this
+ * mode commits the turn (no Cancel), like drawing from the bag.
+ * @param {number[]} from      Oracle square
+ * @param {number|null} pick   Pre-selected revealed index (when re-entering after undo)
+ * @param {number[]} destroy   Pre-selected indices to destroy
+ */
+function _enterDivine(from, pick = null, destroy = []) {
+  uiDivineFrom    = from;
+  uiDivinePick    = pick;
+  uiDivineDestroy = new Set(destroy);
+  enterMode('divine');
+  document.getElementById('flip-preview').hidden = true;
+  _renderDivinePanel();
+  document.getElementById('divine-preview').hidden = false;
+}
+
+function _renderDivinePanel() {
+  const p        = state.currentPlayer;
+  const revealed = state.bags[p].slice(0, 3);
+  const cards    = document.getElementById('divine-cards');
+  cards.innerHTML = '';
+
+  revealed.forEach(function (type, i) {
+    const card = document.createElement('div');
+    card.className = 'divine-card' + (uiDivinePick === i ? ' picked' : '');
+    card.addEventListener('click', function () {
+      uiDivinePick = i;
+      uiDivineDestroy.delete(i);
+      _renderDivinePanel(); render(); updateUI();
+    });
+
+    const cv = document.createElement('canvas');
+    cv.width = 144; cv.height = 144;
+    drawTile(cv.getContext('2d'), 0, 0, 144, type, 0, p);
+    card.appendChild(cv);
+
+    const name = document.createElement('div');
+    name.className   = 'divine-name';
+    name.textContent = TILE_DISPLAY_NAMES[type] ?? type;
+    card.appendChild(name);
+
+    if (uiDivinePick === i) {
+      const tag = document.createElement('div');
+      tag.className   = 'divine-name';
+      tag.textContent = 'Place';
+      card.appendChild(tag);
+    } else if (uiDivinePick !== null) {
+      const destroying = uiDivineDestroy.has(i);
+      const btn = document.createElement('button');
+      btn.className   = 'divine-toggle' + (destroying ? ' destroy' : '');
+      btn.textContent = destroying ? 'Destroy' : 'Return';
+      btn.title       = 'Click to switch between returning this tile to the bag and destroying it';
+      btn.addEventListener('click', function (evt) {
+        evt.stopPropagation();
+        if (uiDivineDestroy.has(i)) uiDivineDestroy.delete(i); else uiDivineDestroy.add(i);
+        _renderDivinePanel();
+      });
+      card.appendChild(btn);
+    }
+    cards.appendChild(card);
+  });
+
+  document.getElementById('divine-hint').textContent = uiDivinePick === null
+    ? 'Click the tile you want to place. The other two return to the bag unless you destroy them.'
+    : 'Click a highlighted square to place it. Toggle the other tiles between Return and Destroy.';
+}
+
+/** The legal Divination move matching the current panel choices and a target square. */
+function _findDivineMove(pos) {
+  const destroy = [...uiDivineDestroy].filter(i => i !== uiDivinePick).sort();
+  return legalMoves.find(m =>
+    m.action === 'divine' &&
+    m.from[0] === uiDivineFrom[0] && m.from[1] === uiDivineFrom[1] &&
+    m.pick === uiDivinePick &&
+    m.pos[0] === pos[0] && m.pos[1] === pos[1] &&
+    JSON.stringify([...m.destroy].sort()) === JSON.stringify(destroy)
+  );
 }
 
 // ─── Highlight computation ────────────────────────────────────────────────────
@@ -1463,6 +1620,23 @@ function computeHighlights() {
     for (const m of legalMoves)
       if (m.action === 'summon' && m.from[0] === sc && m.from[1] === sr)
         h.set(cellKey(...m.to), 'summon');
+    return h;
+  }
+
+  if (uiMode === 'divine-from') {
+    for (const m of legalMoves)
+      if (m.action === 'divine') h.set(cellKey(...m.from), 'cmd-from');
+    return h;
+  }
+
+  if (uiMode === 'divine' && uiDivineFrom) {
+    h.set(cellKey(...uiDivineFrom), 'selected');
+    if (uiDivinePick !== null) {
+      for (const m of legalMoves)
+        if (m.action === 'divine' && m.pick === uiDivinePick &&
+            m.from[0] === uiDivineFrom[0] && m.from[1] === uiDivineFrom[1])
+          h.set(cellKey(...m.pos), 'draw');
+    }
     return h;
   }
 
@@ -1590,7 +1764,9 @@ function updateUI() {
   const msgEl    = document.getElementById('status-msg');
   const drawBtn  = document.getElementById('draw-btn');
   const summonBtn = document.getElementById('summon-btn');
+  const divineBtn = document.getElementById('divine-btn');
   summonBtn.hidden = true;   // re-shown below only on the active player's free turn
+  divineBtn.hidden = true;
 
   // History browsing: show which turn we're viewing and lock all game controls.
   if (_isViewingHistory()) {
@@ -1699,7 +1875,7 @@ function updateUI() {
     }
     playerEl.style.color = sp === 0 ? '#ede0c8' : '#c8a477';
 
-    if (_pendingMove.action === 'draw') {
+    if (_pendingMove.action === 'draw' || _pendingMove.action === 'divine') {
       msgEl.textContent = 'Tile placed \u2014 confirm or choose a different square.';
       document.getElementById('undo-btn').textContent = 'Change Placement';
     } else {
@@ -1775,6 +1951,12 @@ function updateUI() {
     msgEl.textContent = 'Choose the tile to summon.';
   else if (uiMode === 'summon-to')
     msgEl.textContent = 'Choose an open square next to your Duke (your Duke will flip).';
+  else if (uiMode === 'divine-from')
+    msgEl.textContent = 'Choose the Oracle to use.';
+  else if (uiMode === 'divine')
+    msgEl.textContent = uiDivinePick === null
+      ? 'Divination committed — choose a tile to place.'
+      : 'Choose an open square next to your Duke.';
   else if (inGuard)
     msgEl.textContent = 'Your Duke is in Guard — you must resolve the threat.';
   else
@@ -1796,6 +1978,10 @@ function updateUI() {
   // Summon button: only when a tile with the Summon ability has a legal summon.
   summonBtn.hidden   = isAiTurn || !legalMoves.some(m => m.action === 'summon');
   summonBtn.disabled = uiMode !== 'idle';
+
+  // Divination button: only when an Oracle on its non-starting side can act.
+  divineBtn.hidden   = isAiTurn || !legalMoves.some(m => m.action === 'divine');
+  divineBtn.disabled = uiMode !== 'idle';
 }
 
 function showGameOver() {
@@ -1905,6 +2091,21 @@ function handleClick(col, row) {
       m.to[0] === col && m.to[1] === row
     );
     if (m) { commitMove(m); } else { resetUI(); render(); updateUI(); }
+    return;
+  }
+
+  // ── Divination: choose which Oracle, then (after the reveal) a square ───────
+  if (uiMode === 'divine-from') {
+    const m = legalMoves.find(m => m.action === 'divine' && m.from[0] === col && m.from[1] === row);
+    if (m) { _beginDivine([col, row]); } else { resetUI(); }
+    render(); updateUI();
+    return;
+  }
+  if (uiMode === 'divine' && uiDivineFrom) {
+    if (uiDivinePick === null) return;   // pick a tile in the panel first
+    const m = _findDivineMove([col, row]);
+    // No cancel once revealed: a miss-click simply does nothing.
+    if (m) { commitMove(m); }
     return;
   }
 
@@ -2115,12 +2316,18 @@ function undoMove() {
 
   _clearPendingTimer();
   const wasDrawPlacement = _pendingMove && _pendingMove.action === 'draw';
+  const divineMove       = _pendingMove && _pendingMove.action === 'divine' ? _pendingMove : null;
   state            = _pendingPreState;
   _pendingMove     = null;
   _pendingPreState = null;
   document.getElementById('pending-controls').hidden = true;
 
-  if (wasDrawPlacement) {
+  if (divineMove) {
+    // The three tiles were already revealed — stay committed: back to the
+    // reveal panel with the previous choices so the player can pick another square.
+    legalMoves = getLegalMoves(state);
+    _enterDivine(divineMove.from, divineMove.pick, divineMove.destroy);
+  } else if (wasDrawPlacement) {
     // Tile is still committed from the bag — force re-placement elsewhere.
     // peekBag() returns the same tile since we restored the pre-placement state.
     legalMoves = getLegalMoves(state);
@@ -2176,6 +2383,24 @@ document.getElementById('summon-btn').addEventListener('click', function () {
   document.getElementById('flip-preview').hidden = true;
   if (froms.length === 1) { uiSummonFrom = froms[0]; enterMode('summon-to'); }
   else                    { enterMode('summon-from'); }
+  render(); updateUI();
+});
+
+/** Commit to a Divination: persist the obligation (online) and reveal the tiles. */
+function _beginDivine(from) {
+  _saveDrawCommitted(from[0] + ',' + from[1]);
+  _enterDivine(from);
+}
+
+document.getElementById('divine-btn').addEventListener('click', function () {
+  const froms = [];
+  for (const m of legalMoves) {
+    if (m.action === 'divine' && !froms.some(f => f[0] === m.from[0] && f[1] === m.from[1])) froms.push(m.from);
+  }
+  if (froms.length === 0) return;
+  document.getElementById('flip-preview').hidden = true;
+  if (froms.length === 1) { _beginDivine(froms[0]); }
+  else                    { enterMode('divine-from'); }
   render(); updateUI();
 });
 
@@ -2486,6 +2711,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.16.03</div>
+<div class="version">2026.10.16.04</div>
 </body>
 </html>

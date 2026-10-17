@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.03
+ * @version 2026.10.16.04
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.03';
+const TILE_RENDERER_VERSION = '2026.10.16.04';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 

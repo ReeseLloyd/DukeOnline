@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.03
+ * @version 2026.10.16.04
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -72,7 +72,7 @@
  *
  */
 
-const TILES_VERSION = '2026.10.16.03';
+const TILES_VERSION = '2026.10.16.04';
 
 const TILES = {
 
@@ -535,8 +535,9 @@ const TILES = {
         { type: 'move', sq: [ 1, -1] },
         { type: 'move', sq: [ 1,  1] },
       ],
-      // Side 1
+      // Side 1 — no movement; ability II: Divination (only usable with this side up)
       [
+        { type: 'divination' },
       ],
     ],
   },
@@ -552,7 +553,7 @@ const BAG_MAX_PER_TYPE = 4;
 
 // Tiles whose special abilities are not implemented yet; kept out of bags and
 // the bag editor until they are.
-const UNRELEASED_TILES = ['oracle'];
+const UNRELEASED_TILES = [];
 
 /**
  * Tile types a game creator may add to / remove from a bag, in TILES order.

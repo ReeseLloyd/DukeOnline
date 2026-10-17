@@ -1,7 +1,7 @@
 /**
  * ai.js
  * Minimax AI with alpha-beta pruning for The Duke — base game.
- * @version 2026.10.16.03
+ * @version 2026.10.16.04
  *
  * Depends on: tiles.js, game.js (globals must be in scope before this file).
  *
@@ -20,7 +20,7 @@
 
 'use strict';
 
-const AI_VERSION = '2026.10.16.03';
+const AI_VERSION = '2026.10.16.04';
 
 // ─── Piece values (relative material worth) ───────────────────────────────────
 //
@@ -130,7 +130,7 @@ function _negamax(state, depth, alpha, beta) {
     return state.currentPlayer === 1 ? raw : -raw;
   }
 
-  const moves = _orderMoves(getLegalMoves(state), state.board);
+  const moves = _orderMoves(getLegalMoves(state, true), state.board);
 
   if (moves.length === 0) {
     return -(WIN_SCORE + depth);   // no legal moves treated as a loss
@@ -160,7 +160,7 @@ function _negamax(state, depth, alpha, beta) {
  *                         null if no moves are available.
  */
 function getBestMove(state, maxDepth = 4) {
-  const moves = _orderMoves(getLegalMoves(state), state.board);
+  const moves = _orderMoves(getLegalMoves(state, true), state.board);
   if (moves.length === 0) return null;
 
   let bestMove  = moves[0];
