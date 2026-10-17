@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.04
+ * @version 2026.10.16.05
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.04';
+const TILE_RENDERER_VERSION = '2026.10.16.05';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ const TILE_DISPLAY_NAMES = {
   wizard:     'Wizard',
   duchess:    'Duchess',
   oracle:     'Oracle',
+  jester:     'Jester',
 };
 
 // ─── Layout proportions (relative to tile size) ───────────────────────────────
@@ -465,6 +466,7 @@ function _drawIllustration(ctx, ix, iy, iw, ih, type, C) {
     case 'wizard':     _illWand(ctx, C);          break;
     case 'duchess':    _illCrown(ctx, C);         break;
     case 'oracle':     _illCrescent(ctx, C);      break;
+    case 'jester':     _illScepter(ctx, C);       break;
     default:           _illPole(ctx, C);          break;
   }
 
@@ -782,6 +784,34 @@ function _illCrown(ctx, C) {
   ctx.lineTo(cx + w / 2,   cBot);
   ctx.closePath();
   ctx.fill();
+}
+
+// Fool's scepter: three-pointed cap on a slender staff (Jester)
+function _illScepter(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  const capBot = top + h * 0.22;
+  const bandH  = h * 0.025;
+  const staffW = w * 0.12;
+
+  ctx.fillStyle = C.line;
+
+  // Cap: left tip, centre tip (tallest), right tip, tapering to the neck
+  ctx.beginPath();
+  ctx.moveTo(cx - w / 2,    top + h * 0.04);
+  ctx.lineTo(cx - w * 0.10, top + h * 0.14);
+  ctx.lineTo(cx,            top);
+  ctx.lineTo(cx + w * 0.10, top + h * 0.14);
+  ctx.lineTo(cx + w / 2,    top + h * 0.04);
+  ctx.lineTo(cx + w * 0.18, capBot);
+  ctx.lineTo(cx - w * 0.18, capBot);
+  ctx.closePath();
+  ctx.fill();
+
+  // Band and staff
+  ctx.fillRect(cx - w * 0.22, capBot, w * 0.44, bandH);
+  ctx.fillRect(cx - staffW / 2, capBot + bandH, staffW, bot - (capBot + bandH));
 }
 
 // Crescent moon (Oracle)

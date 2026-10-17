@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.04
+ * @version 2026.10.16.05
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -61,7 +61,10 @@
  *   count        {number}   Total copies of this tile per player (bag + board).
  *   startOnBoard {number}   How many copies start on the board rather than in the
  *                           bag. Omit (or 0) for bag-only tiles.
- *   enhanced     {boolean}  Optional. Enhanced tiles — optional variant rules.
+ *   enhanced     {boolean}  Optional. Enhanced tiles (special abilities) — optional;
+ *                           excluded from the default bag.
+ *   promo        {boolean}  Optional. Promo / exclusive tile — optional;
+ *                           excluded from the default bag.
  *   tileGridPos  {[col,row]} Position of the tile's own square within the 5×5
  *                           display grid (0-indexed, top-left = [0,0]).
  *                           Defaults to [2, 2] (center). Only needed for tiles
@@ -72,7 +75,7 @@
  *
  */
 
-const TILES_VERSION = '2026.10.16.04';
+const TILES_VERSION = '2026.10.16.05';
 
 const TILES = {
 
@@ -542,6 +545,37 @@ const TILES = {
     ],
   },
 
+  // ---------------------------------------------------------------------------
+  // JESTER  (promo tile — Kickstarter/event exclusive; optional, not in the
+  // default bag). Patterns from the Events print-and-play sheet.
+  // ---------------------------------------------------------------------------
+  jester: {
+    count: 1,
+    promo: true,
+    sides: [
+      // Side 0 — forward-diagonal jumps; three moves back; two long back diagonals
+      [
+        { type: 'jump', sq: [-1,  1] },
+        { type: 'jump', sq: [ 1,  1] },
+        { type: 'move', sq: [-1, -1] },
+        { type: 'move', sq: [ 0, -1] },
+        { type: 'move', sq: [ 1, -1] },
+        { type: 'move', sq: [-2, -2] },
+        { type: 'move', sq: [ 2, -2] },
+      ],
+      // Side 1 — all jumps: forward diagonals, wide back sides, back row of three
+      [
+        { type: 'jump', sq: [-1,  1] },
+        { type: 'jump', sq: [ 1,  1] },
+        { type: 'jump', sq: [-2, -1] },
+        { type: 'jump', sq: [ 2, -1] },
+        { type: 'jump', sq: [-1, -2] },
+        { type: 'jump', sq: [ 0, -2] },
+        { type: 'jump', sq: [ 1, -2] },
+      ],
+    ],
+  },
+
 };
 
 // ---------------------------------------------------------------------------
@@ -566,13 +600,13 @@ function editableTileTypes() {
 
 /**
  * The standard bag as a { type: count } map (bag copies only — startOnBoard
- * copies are placed during setup and are not part of the bag). Enhanced
- * tiles are optional and excluded.
+ * copies are placed during setup and are not part of the bag). Enhanced and
+ * promo tiles are optional and excluded.
  */
 function defaultBagCounts() {
   const counts = {};
   for (const key of editableTileTypes()) {
-    if (TILES[key].enhanced) continue;
+    if (TILES[key].enhanced || TILES[key].promo) continue;
     const n = TILES[key].count - (TILES[key].startOnBoard ?? 0);
     if (n > 0) counts[key] = n;
   }
