@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.06
+ * @version 2026.10.16.07
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -44,6 +44,12 @@
  *            in the display grid is not adjacent (e.g. dir [0, 2] places the icon
  *            at the top-center cell of a tile with tileGridPos [2, 2]).
  *
+ * defense    Solid square. Passive marker on the *protected* tile: an attacker
+ *            cannot capture this tile if its straight move toward/into it
+ *            passes through, or starts on, a marked square (offsets relative
+ *            to this tile, in its owner's frame). Command ignores Defense. See
+ *            _defenseBlocks in game.js for the jump/strike routing rules.
+ *
  * summon     Roman numeral I. Passive ability marker (no sq/dir). Instead of moving
  *            or drawing, the player may flip their Duke (it stays put) and take
  *            a tile bearing this ability from anywhere on the board to an open
@@ -78,7 +84,7 @@
  *
  */
 
-const TILES_VERSION = '2026.10.16.06';
+const TILES_VERSION = '2026.10.16.07';
 
 const TILES = {
 
@@ -575,6 +581,40 @@ const TILES = {
         { type: 'jump', sq: [-1, -2] },
         { type: 'jump', sq: [ 0, -2] },
         { type: 'jump', sq: [ 1, -2] },
+      ],
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
+  // SHIELDMAIDEN  (promo tile — optional, not in the default bag)
+  // Mirror-image faces, identical for both players. Defense squares mark where
+  // an attacker cannot capture this tile from (see _defenseBlocks in game.js).
+  // ---------------------------------------------------------------------------
+  shieldmaiden: {
+    count: 1,
+    promo: true,
+    sides: [
+      // Side 0 — moves left and forward; Defense on the right column
+      [
+        { type: 'move',    sq: [-1,  1] },
+        { type: 'move',    sq: [ 0,  1] },
+        { type: 'move',    sq: [-1,  0] },
+        { type: 'move',    sq: [-1, -1] },
+        { type: 'move',    sq: [ 0, -2] },
+        { type: 'defense', sq: [ 1,  1] },
+        { type: 'defense', sq: [ 1,  0] },
+        { type: 'defense', sq: [ 1, -1] },
+      ],
+      // Side 1 — mirror image: moves right and forward; Defense on the left column
+      [
+        { type: 'move',    sq: [ 1,  1] },
+        { type: 'move',    sq: [ 0,  1] },
+        { type: 'move',    sq: [ 1,  0] },
+        { type: 'move',    sq: [ 1, -1] },
+        { type: 'move',    sq: [ 0, -2] },
+        { type: 'defense', sq: [-1,  1] },
+        { type: 'defense', sq: [-1,  0] },
+        { type: 'defense', sq: [-1, -1] },
       ],
     ],
   },

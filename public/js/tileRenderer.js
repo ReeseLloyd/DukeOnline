@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.06
+ * @version 2026.10.16.07
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.06';
+const TILE_RENDERER_VERSION = '2026.10.16.07';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
@@ -59,6 +59,7 @@ const TILE_DISPLAY_NAMES = {
   oracle:     'Oracle',
   jester:     'Jester',
   swashbuckler: 'Swashbuckler',
+  shieldmaiden: 'Shieldmaiden',
 };
 
 // ─── Layout proportions (relative to tile size) ───────────────────────────────
@@ -217,6 +218,7 @@ function _drawIcons(ctx, gx, gy, L, type, side, C, player) {
       case 'jump':      _iconJump(ctx, cx, cy, cellSize, C);                      break;
       case 'strike':    _iconStrike(ctx, cx, cy, cellSize, C);                    break;
       case 'command':   _iconCommand(ctx, cx, cy, cellSize, C);                   break;
+      case 'defense':   _iconDefense(ctx, cx, cy, cellSize, C);                   break;
       case 'slide':     _iconArrow(ctx, cx, cy, cellSize, action.dir, true,  C);  break;
       case 'jumpSlide': _iconArrow(ctx, cx, cy, cellSize, action.dir, false, C);  break;
     }
@@ -248,6 +250,13 @@ function _iconJump(ctx, cx, cy, cs, C) {
   ctx.beginPath();
   ctx.arc(cx, cy, cs * 0.30, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+// Solid square — Defense (marks a square an attacker cannot capture this tile from)
+function _iconDefense(ctx, cx, cy, cs, C) {
+  const s = cs * 0.56;
+  ctx.fillStyle = C.line;
+  ctx.fillRect(cx - s / 2, cy - s / 2, s, s);
 }
 
 // 6-pointed star outline — Strike
@@ -469,6 +478,7 @@ function _drawIllustration(ctx, ix, iy, iw, ih, type, C) {
     case 'oracle':     _illCrescent(ctx, C);      break;
     case 'jester':     _illScepter(ctx, C);       break;
     case 'swashbuckler': _illRapier(ctx, C);      break;
+    case 'shieldmaiden': _illShieldSword(ctx, C); break;
     default:           _illPole(ctx, C);          break;
   }
 
@@ -785,6 +795,40 @@ function _illCrown(ctx, C) {
   ctx.lineTo(cx + w / 2,   cTop + peakH);
   ctx.lineTo(cx + w / 2,   cBot);
   ctx.closePath();
+  ctx.fill();
+}
+
+// Shield over a sword's crossguard and grip (Shieldmaiden)
+function _illShieldSword(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  const sTop = top;
+  const sMid = top + h * 0.36;
+  const sBot = top + h * 0.62;
+
+  ctx.fillStyle = C.line;
+
+  // Shield: flat top, straight sides, sweeping to a point
+  ctx.beginPath();
+  ctx.moveTo(cx - w / 2, sTop);
+  ctx.lineTo(cx + w / 2, sTop);
+  ctx.lineTo(cx + w / 2, sMid);
+  ctx.quadraticCurveTo(cx + w / 2, sBot, cx, sBot);
+  ctx.quadraticCurveTo(cx - w / 2, sBot, cx - w / 2, sMid);
+  ctx.closePath();
+  ctx.fill();
+
+  // Sword below the shield: crossguard, grip, pommel
+  const guardY = sBot + h * 0.07;
+  const guardW = w * 0.62;
+  const guardH = h * 0.04;
+  const gripW  = w * 0.20;
+  const gripH  = (bot - guardY - guardH) * 0.70;
+  ctx.fillRect(cx - guardW / 2, guardY, guardW, guardH);
+  ctx.fillRect(cx - gripW / 2, guardY + guardH, gripW, gripH);
+  ctx.beginPath();
+  ctx.arc(cx, guardY + guardH + gripH + gripW * 0.7, gripW * 0.85, 0, Math.PI * 2);
   ctx.fill();
 }
 

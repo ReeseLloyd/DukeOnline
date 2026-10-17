@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.10.16.06
+ * @version 2026.10.16.07
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -60,7 +60,7 @@
 
 'use strict';
 
-const GAME_VERSION = '2026.10.16.06';
+const GAME_VERSION = '2026.10.16.07';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 
@@ -592,6 +592,77 @@ function _isDukeThreatenedBy(board, attackedPlayer) {
   return false;
 }
 
+// ─── Internal: Defense ───────────────────────────────────────────────────────
+//
+// Rulebook: a tile cannot capture a target if its straight move toward or into
+// the target's square would pass through a square marked with a Defense icon
+// *on the target tile*, or if the attacker starts on such a square. A jump or
+// strike whose displacement is a straight line must use that line; if it is
+// not straight (knight-like) the player may take either L-shaped route, so the
+// capture is blocked only when both routes cross a Defense square. Command
+// ignores Defense (it never calls this).
+
+const _defenseCache = {};
+
+/** [dc,dr] Defense offsets (tile-local) for a tile face, or null if it has none. */
+function _defenseOffsets(type, side, player) {
+  const k = type + ':' + side + ':' + player;
+  let v = _defenseCache[k];
+  if (v === undefined) {
+    const list = getTileActions(type, side, player).filter(a => a.type === 'defense').map(a => a.sq);
+    v = _defenseCache[k] = list.length ? list : null;
+  }
+  return v;
+}
+
+/** Squares strictly between attacker and target along one L-shaped route. */
+function _lRoute(ac, ar, tc, tr, xFirst) {
+  const dx = tc - ac, dy = tr - ar;
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  const ax = Math.abs(dx), ay = Math.abs(dy);
+  const route = [];
+  if (xFirst) {
+    for (let i = 1; i <= ax; i++) route.push([ac + sx * i, ar]);
+    for (let j = 1; j <  ay; j++) route.push([tc, ar + sy * j]);
+  } else {
+    for (let j = 1; j <= ay; j++) route.push([ac, ar + sy * j]);
+    for (let i = 1; i <  ax; i++) route.push([ac + sx * i, tr]);
+  }
+  return route;
+}
+
+/**
+ * True if the tile at [tc,tr] is protected by Defense from a capture launched
+ * from [ac,ar]. The caller guarantees an enemy tile stands at [tc,tr].
+ */
+function _defenseBlocks(board, ac, ar, tc, tr) {
+  const target  = board[tr][tc];
+  const offsets = _defenseOffsets(target.type, target.side, target.player);
+  if (!offsets) return false;
+
+  const defended = new Set(offsets.map(([dc, dr]) => {
+    const [bdc, bdr] = _transform(target.player, dc, dr);
+    return (tc + bdc) + ',' + (tr + bdr);
+  }));
+  const isDef = (c, r) => defended.has(c + ',' + r);
+
+  if (isDef(ac, ar)) return true;                       // starts on a Defense square
+
+  const dx = tc - ac, dy = tr - ar;
+  const ax = Math.abs(dx), ay = Math.abs(dy);
+  if (dx === 0 || dy === 0 || ax === ay) {               // straight line: all squares between
+    const sx = Math.sign(dx), sy = Math.sign(dy);
+    for (let i = 1; i < Math.max(ax, ay); i++) {
+      if (isDef(ac + sx * i, ar + sy * i)) return true;
+    }
+    return false;
+  }
+
+  // Non-straight (knight-like): blocked only if both L-routes cross a Defense square.
+  return [true, false].every(xFirst =>
+    _lRoute(ac, ar, tc, tr, xFirst).some(([c, r]) => isDef(c, r)));
+}
+
 // ─── Internal: per-tile move generation ──────────────────────────────────────
 
 /**
@@ -641,8 +712,9 @@ function _movesForTile(board, col, row, piece, player) {
   // ── Regular moves (move, jump, strike, slide, jumpSlide) ──────────────────
   for (const action of actions) {
     if (action.type === 'command') continue;  // already handled above
-    // Passive ability markers (no sq/dir) — handled in _getRawLegalMoves, not here.
-    if (action.type === 'summon' || action.type === 'divination') continue;
+    // Passive markers — summon/divination are handled in _getRawLegalMoves;
+    // defense is read from the *target* tile in _defenseBlocks. Not moves.
+    if (action.type === 'summon' || action.type === 'divination' || action.type === 'defense') continue;
 
     if (action.type === 'slide' || action.type === 'jumpSlide') {
       // Normalize dir to a unit step, then apply player transform.
@@ -655,6 +727,7 @@ function _movesForTile(board, col, row, piece, player) {
       );
       const targets = _resolveSlide(board, col, row, bdc, bdr, player, action.type === 'jumpSlide');
       for (const [tc, tr] of targets) {
+        if (board[tr][tc] && _defenseBlocks(board, col, row, tc, tr)) continue;
         moves.push({ action: 'move', from: [col, row], to: [tc, tr] });
       }
 
@@ -664,7 +737,7 @@ function _movesForTile(board, col, row, piece, player) {
       const tr = row + bdr;
       if (!_inBounds(tc, tr)) continue;
       const target = board[tr][tc];
-      if (target && target.player !== player) {
+      if (target && target.player !== player && !_defenseBlocks(board, col, row, tc, tr)) {
         moves.push({ action: 'strike', from: [col, row], target: [tc, tr] });
       }
 
@@ -676,6 +749,7 @@ function _movesForTile(board, col, row, piece, player) {
       if (!_inBounds(tc, tr)) continue;
       const target = board[tr][tc];
       if (target && target.player === player) continue;  // friendly blocks
+      if (target && _defenseBlocks(board, col, row, tc, tr)) continue;  // capture blocked by Defense
 
       if (action.type === 'jump') {
         moves.push({ action: 'move', from: [col, row], to: [tc, tr] });
