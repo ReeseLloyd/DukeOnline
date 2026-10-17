@@ -1,7 +1,7 @@
 /**
  * ai.js
  * Minimax AI with alpha-beta pruning for The Duke — base game.
- * @version 2026.10.16.07
+ * @version 2026.10.16.08
  *
  * Depends on: tiles.js, game.js (globals must be in scope before this file).
  *
@@ -20,7 +20,7 @@
 
 'use strict';
 
-const AI_VERSION = '2026.10.16.07';
+const AI_VERSION = '2026.10.16.08';
 
 // ─── Piece values (relative material worth) ───────────────────────────────────
 //
@@ -47,6 +47,7 @@ const TILE_VALUES = {
   jester:     5,
   swashbuckler: 5,
   shieldmaiden: 5,
+  lancer:     5,
 };
 
 const WIN_SCORE = 1_000_000;

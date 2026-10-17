@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.07
+ * @version 2026.10.16.08
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.07';
+const TILE_RENDERER_VERSION = '2026.10.16.08';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
@@ -60,6 +60,7 @@ const TILE_DISPLAY_NAMES = {
   jester:     'Jester',
   swashbuckler: 'Swashbuckler',
   shieldmaiden: 'Shieldmaiden',
+  lancer:     'Lancer',
 };
 
 // ─── Layout proportions (relative to tile size) ───────────────────────────────
@@ -85,8 +86,10 @@ function drawTile(ctx, x, y, size, type, side, player) {
   _drawGrid(ctx, x + L.gridX, y + L.gridY, L, C);
   _drawIcons(ctx, x + L.gridX, y + L.gridY, L, type, side, C, player);
   _drawName(ctx, x + L.nameX, y + L.nameY, L.nameW, L.nameH, type, C);
-  _drawIllustration(ctx, x + L.illX, y, L.illW, size, type, C);
-  _drawAbilityMark(ctx, x + L.illX, y, L.illW, size, type, side, C);
+  // Tiles with an enhanced ability reserve room under the art for the numeral.
+  const artH = _abilityMarker(type, side, player) ? size * 0.86 : size;
+  _drawIllustration(ctx, x + L.illX, y, L.illW, artH, type, C);
+  _drawAbilityMark(ctx, x + L.illX, y, L.illW, size, type, side, C, player);
 }
 
 // ─── Enhanced-ability numeral ─────────────────────────────────────────────────
@@ -96,9 +99,14 @@ function drawTile(ctx, x, y, size, type, side, player) {
 
 const _ABILITY_NUMERALS = { summon: 'I', divination: 'II' };
 
-function _drawAbilityMark(ctx, ix, iy, iw, size, type, side, C) {
-  const actions = (typeof TILES !== 'undefined') ? TILES[type]?.sides[side] : null;
-  const marker  = actions && actions.find(a => _ABILITY_NUMERALS[a.type]);
+/** The ability marker action (summon / divination) on this face, or null. */
+function _abilityMarker(type, side, player) {
+  if (typeof TILES === 'undefined' || !TILES[type]) return null;
+  return getTileActions(type, side, player).find(a => _ABILITY_NUMERALS[a.type]) || null;
+}
+
+function _drawAbilityMark(ctx, ix, iy, iw, size, type, side, C, player) {
+  const marker = _abilityMarker(type, side, player);
   if (!marker) return;
 
   ctx.save();
@@ -479,6 +487,7 @@ function _drawIllustration(ctx, ix, iy, iw, ih, type, C) {
     case 'jester':     _illScepter(ctx, C);       break;
     case 'swashbuckler': _illRapier(ctx, C);      break;
     case 'shieldmaiden': _illShieldSword(ctx, C); break;
+    case 'lancer':     _illSpearhead(ctx, C);     break;
     default:           _illPole(ctx, C);          break;
   }
 
@@ -794,6 +803,34 @@ function _illCrown(ctx, C) {
   ctx.lineTo(cx + w / 4,   cTop);
   ctx.lineTo(cx + w / 2,   cTop + peakH);
   ctx.lineTo(cx + w / 2,   cBot);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Long tapering lance head on a short stem (Lancer)
+function _illSpearhead(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  const headBot = top + h * 0.84;
+  const stemW   = w * 0.10;
+
+  ctx.fillStyle = C.line;
+
+  // Spike: needle point widening to a flared base
+  ctx.beginPath();
+  ctx.moveTo(cx,             top);
+  ctx.lineTo(cx + w * 0.17,  headBot);
+  ctx.lineTo(cx - w * 0.17,  headBot);
+  ctx.closePath();
+  ctx.fill();
+
+  // Stem and small tip below the head
+  ctx.fillRect(cx - stemW / 2, headBot, stemW, h * 0.10);
+  ctx.beginPath();
+  ctx.moveTo(cx,             bot);
+  ctx.lineTo(cx + w * 0.10,  headBot + h * 0.10);
+  ctx.lineTo(cx - w * 0.10,  headBot + h * 0.10);
   ctx.closePath();
   ctx.fill();
 }

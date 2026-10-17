@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.07
+ * @version 2026.10.16.08
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -84,7 +84,7 @@
  *
  */
 
-const TILES_VERSION = '2026.10.16.07';
+const TILES_VERSION = '2026.10.16.08';
 
 const TILES = {
 
@@ -581,6 +581,31 @@ const TILES = {
         { type: 'jump', sq: [-1, -2] },
         { type: 'jump', sq: [ 0, -2] },
         { type: 'jump', sq: [ 1, -2] },
+      ],
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
+  // LANCER  (promo tile — optional, not in the default bag). Carries ability I
+  // (Summon) on both faces, like the Duchess. Same pattern for both players.
+  // ---------------------------------------------------------------------------
+  lancer: {
+    count: 1,
+    promo: true,
+    enhanced: true,
+    sides: [
+      // Side 0 — step forward, or jump-slide forward over the first square
+      [
+        { type: 'move',      sq:  [ 0,  1] },
+        { type: 'jumpSlide', dir: [ 0,  2] },
+        { type: 'summon' },
+      ],
+      // Side 1 — strike two ahead, step forward, slide straight back
+      [
+        { type: 'strike', sq:  [ 0,  2] },
+        { type: 'move',   sq:  [ 0,  1] },
+        { type: 'slide',  dir: [ 0, -1] },
+        { type: 'summon' },
       ],
     ],
   },
