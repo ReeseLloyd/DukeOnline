@@ -219,6 +219,42 @@
 
     #local-diff-label { color: #c8a020; font-weight: bold; }
 
+    /* ── Bag setup step ──────────────────────────────────────────────────────── */
+
+    .seg-btn.active { background: #5a3090; border-color: #c8a020; }
+
+    #bag-editor[hidden] { display: none; }
+    #bag-editor { display: flex; flex-direction: column; gap: 8px; }
+
+    #bag-editor-list {
+      max-height: 300px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(122,80,160,0.5) transparent;
+    }
+
+    .bag-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 4px 5px 0;
+      border-bottom: 1px solid #3a2060;
+    }
+
+    .bag-row canvas { width: 40px; height: 40px; border-radius: 3px; flex-shrink: 0; }
+    .bag-row .bag-name { flex: 1; font-size: 0.88rem; }
+    .bag-row.changed .bag-name { color: #c8a020; }
+
+    .bag-step-btn { width: 28px; padding: 2px 0; font-size: 1rem; line-height: 1.2; }
+    .bag-count { width: 1.4em; text-align: center; font-family: 'Courier New', Courier, monospace; }
+
+    .bag-editor-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+
     /* ── My Games scrollable body ────────────────────────────────────────────── */
 
     #my-games-body {
@@ -401,8 +437,27 @@
   <div id="play-step-local-ai" class="play-step" hidden>
     <p>Difficulty: <span id="local-diff-label">4 &#x2014; Medium</span></p>
     <input type="range" id="local-diff-slider" min="1" max="8" value="4">
-    <button id="local-diff-start-btn">Start Game</button>
+    <button id="local-diff-start-btn">Next: Bag Setup</button>
     <button class="back-btn" data-back="local">&larr; Back</button>
+  </div>
+
+  <!-- Step: bag setup (shared by online create, local 1v1, local vs AI) -->
+  <div id="play-step-bags" class="play-step" hidden>
+    <div class="btn-row">
+      <button id="bag-mode-standard" class="seg-btn active">Standard bag</button>
+      <button id="bag-mode-custom" class="seg-btn">Custom bag</button>
+    </div>
+    <div id="bag-editor" hidden>
+      <p class="info-msg">Both players draw from this bag. Everyone still starts with a Duke and two Footmen.</p>
+      <div id="bag-editor-list"></div>
+      <div class="bag-editor-foot">
+        <span id="bag-editor-total"></span>
+        <button id="bag-reset-btn" class="btn-sm">Reset to standard</button>
+      </div>
+    </div>
+    <div class="error-msg" id="bag-error"></div>
+    <button id="bag-go-btn">Start Game</button>
+    <button class="back-btn" id="bag-back-btn" data-back="root">&larr; Back</button>
   </div>
 </div>
 
@@ -419,17 +474,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
 <!-- Tile renderer for favicon -->
-<script src="js/tiles.js?v=2026.09.16.01"></script>
-<script src="js/tileRenderer.js?v=2026.09.16.01"></script>
+<script src="js/tiles.js?v=2026.10.16.01"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.01"></script>
 
-<script src="js/firebase.js?v=2026.09.16.01"></script>
+<script src="js/firebase.js?v=2026.10.16.01"></script>
 
 <script>
 'use strict';
 
 // ─── Version check ────────────────────────────────────────────────────────────
 (function () {
-  const EXPECTED = '2026.09.16.01';
+  const EXPECTED = '2026.10.16.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && FIREBASE_VERSION      === EXPECTED;
@@ -493,7 +548,7 @@ function _showLogin() {
   document.getElementById('my-games-card').hidden = true;
   // Reset any in-progress create flow
   _playStep('root');
-  document.getElementById('online-new-btn').disabled = false;
+  document.getElementById('bag-go-btn').disabled = false;
 }
 
 // ─── Play card: branching steps ──────────────────────────────────────────────
@@ -516,7 +571,7 @@ document.getElementById('online-join-btn').addEventListener('click', function ()
 });
 
 document.getElementById('local-hotseat-btn').addEventListener('click', function () {
-  window.location.href = 'game.html?mode=hotseat';
+  _openBagStep('local-hotseat', 'local');
 });
 
 document.getElementById('local-ai-btn').addEventListener('click', function () {
@@ -528,8 +583,7 @@ document.getElementById('local-diff-slider').addEventListener('input', function 
 });
 
 document.getElementById('local-diff-start-btn').addEventListener('click', function () {
-  const depth = document.getElementById('local-diff-slider').value;
-  window.location.href = 'game.html?mode=ai&difficulty=' + depth;
+  _openBagStep('local-ai', 'local-ai');
 });
 
 function _diffLabel(d) {
@@ -766,17 +820,21 @@ function clearOnlineError()   { document.getElementById('online-error').textCont
 
 // ─── Create flow ──────────────────────────────────────────────────────────────
 
-document.getElementById('online-new-btn').addEventListener('click', async function () {
-  this.disabled = true;
+document.getElementById('online-new-btn').addEventListener('click', function () {
   clearOnlineError();
-
-  const username = _getUsername();
-  const userId   = _getUserId();
-  if (!username) {
+  if (!_getUsername()) {
     showOnlineError('Sign in before creating a game.');
-    this.disabled = false;
     return;
   }
+  _openBagStep('online-create', 'online');
+});
+
+async function _createOnlineGameFlow(bagConfig) {
+  const goBtn    = document.getElementById('bag-go-btn');
+  const username = _getUsername();
+  const userId   = _getUserId();
+  goBtn.disabled = true;
+  showBagError('');
 
   try {
     await initFirebase();
@@ -784,7 +842,7 @@ document.getElementById('online-new-btn').addEventListener('click', async functi
     _createSeed = Date.now() ^ (Math.random() * 0xFFFFFFFF | 0);
     _createFP   = Math.round(Math.random());
 
-    const { code } = await createOnlineGame(_createSeed, _createFP, username, userId);
+    const { code } = await createOnlineGame(_createSeed, _createFP, username, userId, bagConfig);
     _createCode = code;
 
     saveMyGame(code, 0, _createSeed);
@@ -807,9 +865,147 @@ document.getElementById('online-new-btn').addEventListener('click', async functi
 
   } catch (e) {
     console.error(e);
-    showOnlineError('Could not create game. Check your connection and try again.');
-    this.disabled = false;
+    showBagError('Could not create game. Check your connection and try again.');
+    goBtn.disabled = false;
   }
+}
+
+// ─── Bag setup step (online create, local 1v1, local vs AI) ──────────────────
+//
+// The creator picks the bag once for both players. "Standard" is the default
+// every time the step opens; the last custom counts are remembered in
+// localStorage so the editor starts from them.
+
+const _BAG_LS_KEY = 'duke_bag_custom';
+
+let _bagAction = null;               // 'online-create' | 'local-hotseat' | 'local-ai'
+let _bagMode   = 'standard';         // 'standard' | 'custom'
+let _bagCounts = defaultBagCounts();
+let _bagRows   = null;               // { type: { row, countEl, minus, plus } } — built on first open
+
+function showBagError(msg) { document.getElementById('bag-error').textContent = msg; }
+
+function _loadSavedBagCounts() {
+  try {
+    return sanitizeBagCounts(JSON.parse(localStorage.getItem(_BAG_LS_KEY))) ?? defaultBagCounts();
+  } catch (_) { return defaultBagCounts(); }
+}
+
+function _buildBagEditor() {
+  const list = document.getElementById('bag-editor-list');
+  _bagRows = {};
+  for (const type of editableTileTypes()) {
+    const row = document.createElement('div');
+    row.className = 'bag-row';
+
+    const cv = document.createElement('canvas');
+    cv.width = 80; cv.height = 80;
+    drawTile(cv.getContext('2d'), 0, 0, 80, type, 0, 0);
+
+    const name = document.createElement('span');
+    name.className   = 'bag-name';
+    name.textContent = TILE_DISPLAY_NAMES[type] ?? type;
+
+    const minus = document.createElement('button');
+    minus.className = 'bag-step-btn'; minus.textContent = '−';
+    minus.addEventListener('click', () => _stepBag(type, -1));
+
+    const countEl = document.createElement('span');
+    countEl.className = 'bag-count';
+
+    const plus = document.createElement('button');
+    plus.className = 'bag-step-btn'; plus.textContent = '+';
+    plus.addEventListener('click', () => _stepBag(type, +1));
+
+    row.append(cv, name, minus, countEl, plus);
+    list.appendChild(row);
+    _bagRows[type] = { row, countEl, minus, plus };
+  }
+}
+
+function _stepBag(type, delta) {
+  const n = Math.max(0, Math.min(BAG_MAX_PER_TYPE, (_bagCounts[type] ?? 0) + delta));
+  if (n > 0) _bagCounts[type] = n; else delete _bagCounts[type];
+  _updateBagStep();
+}
+
+/** Total tiles in the bag being edited. */
+function _bagTotal() {
+  return Object.values(_bagCounts).reduce((a, b) => a + b, 0);
+}
+
+function _updateBagStep() {
+  const custom = _bagMode === 'custom';
+  document.getElementById('bag-mode-standard').classList.toggle('active', !custom);
+  document.getElementById('bag-mode-custom').classList.toggle('active', custom);
+  document.getElementById('bag-editor').hidden = !custom;
+
+  const std = defaultBagCounts();
+  for (const type of editableTileTypes()) {
+    const r = _bagRows[type];
+    const n = _bagCounts[type] ?? 0;
+    r.countEl.textContent = n;
+    r.minus.disabled = n <= 0;
+    r.plus.disabled  = n >= BAG_MAX_PER_TYPE;
+    r.row.classList.toggle('changed', n !== (std[type] ?? 0));
+  }
+
+  const total = _bagTotal();
+  document.getElementById('bag-editor-total').textContent =
+    total + ' tile' + (total === 1 ? '' : 's') + ' per bag';
+
+  const empty = custom && total === 0;
+  document.getElementById('bag-go-btn').disabled = empty;
+  showBagError(empty ? 'Add at least one tile to the bag.' : '');
+}
+
+function _openBagStep(action, backTo) {
+  if (!_bagRows) _buildBagEditor();
+  _bagAction = action;
+  _bagMode   = 'standard';
+  _bagCounts = _loadSavedBagCounts();
+  document.getElementById('bag-go-btn').textContent = action === 'online-create' ? 'Create Game' : 'Start Game';
+  document.getElementById('bag-back-btn').dataset.back = backTo;
+  _updateBagStep();
+  _playStep('bags');
+}
+
+document.getElementById('bag-mode-standard').addEventListener('click', function () {
+  _bagMode = 'standard';
+  _updateBagStep();
+});
+document.getElementById('bag-mode-custom').addEventListener('click', function () {
+  _bagMode = 'custom';
+  _updateBagStep();
+});
+document.getElementById('bag-reset-btn').addEventListener('click', function () {
+  _bagCounts = defaultBagCounts();
+  _updateBagStep();
+});
+
+/** The config to hand to the game: null for the standard bag, else { p0, p1 }. */
+function _currentBagConfig() {
+  if (_bagMode !== 'custom') return null;
+  const counts = sanitizeBagCounts(_bagCounts);
+  if (!counts) return null;
+  try { localStorage.setItem(_BAG_LS_KEY, JSON.stringify(counts)); } catch (_) {}
+  return sanitizeBagConfig({ p0: counts, p1: counts });   // null if it equals the standard bag
+}
+
+function _launchLocal(query, bagConfig) {
+  try {
+    if (bagConfig) sessionStorage.setItem('duke_local_bagconfig', JSON.stringify(bagConfig));
+    else           sessionStorage.removeItem('duke_local_bagconfig');
+  } catch (_) {}
+  window.location.href = 'game.html?' + query + (bagConfig ? '&bags=custom' : '');
+}
+
+document.getElementById('bag-go-btn').addEventListener('click', function () {
+  const cfg = _currentBagConfig();
+  if (_bagAction === 'online-create')      _createOnlineGameFlow(cfg);
+  else if (_bagAction === 'local-hotseat') _launchLocal('mode=hotseat', cfg);
+  else if (_bagAction === 'local-ai')
+    _launchLocal('mode=ai&difficulty=' + document.getElementById('local-diff-slider').value, cfg);
 });
 
 // ─── Copy helper ─────────────────────────────────────────────────────────────
@@ -854,7 +1050,7 @@ document.getElementById('online-cancel-btn').addEventListener('click', function 
   const ws = document.getElementById('online-waiting-status');
   ws.textContent = 'Waiting for opponent to join…';
   ws.style.color = ws.style.opacity = ws.style.fontStyle = '';
-  document.getElementById('online-new-btn').disabled = false;
+  document.getElementById('bag-go-btn').disabled = false;
   _playStep('online');
 });
 
@@ -913,6 +1109,6 @@ if (_getUsername() && _getUserId()) {
 
 </script>
 
-<div class="version">2026.09.16.01</div>
+<div class="version">2026.10.16.01</div>
 </body>
 </html>

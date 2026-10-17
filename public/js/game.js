@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.09.16.01
+ * @version 2026.10.16.01
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -26,6 +26,7 @@
  *   winner:        0|1|null
  *   turn:          number               Increments after each completed move.
  *   seed:          number               PRNG seed stored for Firestore / replay.
+ *   bagConfig:     {p0,p1}|null         Custom bag counts per player; null = standard bag.
  *
  *   Each board cell: null  or  { type: string, player: 0|1, side: 0|1 }
  *
@@ -51,7 +52,7 @@
 
 'use strict';
 
-const GAME_VERSION = '2026.09.16.01';
+const GAME_VERSION = '2026.10.16.01';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 
@@ -83,16 +84,19 @@ function _shuffle(arr, rng) {
 /**
  * Create a fresh game state.
  * @param {object} [opts]
- * @param {number} [opts.seed]  PRNG seed for bag shuffles. Defaults to Date.now().
+ * @param {number} [opts.seed]       PRNG seed for bag shuffles. Defaults to Date.now().
+ * @param {object} [opts.bagConfig]  Optional { p0, p1 } custom bag counts (see
+ *   sanitizeBagConfig in tiles.js). Omit/null for the standard bag.
  */
-function createGame({ seed = Date.now() } = {}) {
+function createGame({ seed = Date.now(), bagConfig = null } = {}) {
   const rng = _mulberry32(seed);
+  const cfg = sanitizeBagConfig(bagConfig);
 
   // Shuffle each player's bag independently using the same seeded RNG.
   // buildBag() (from tiles.js) returns only the tiles that belong in the bag —
   // startOnBoard copies are excluded and placed directly during setup.
-  const bag0 = _shuffle(buildBag(), rng);
-  const bag1 = _shuffle(buildBag(), rng);
+  const bag0 = _shuffle(buildBag(cfg?.p0), rng);
+  const bag1 = _shuffle(buildBag(cfg?.p1), rng);
 
   const board       = Array.from({ length: 6 }, () => Array(6).fill(null));
   const firstPlayer = Math.floor(rng() * 2);   // randomly determined; also sets setup order
@@ -109,6 +113,7 @@ function createGame({ seed = Date.now() } = {}) {
     winner: null,
     turn: 0,
     seed,
+    bagConfig: cfg,   // null = standard bags; kept for the bag popup's per-type totals
   };
 }
 
@@ -378,6 +383,7 @@ function _copyState(state) {
     winner:        state.winner,
     turn:          state.turn,
     seed:          state.seed,
+    bagConfig:     state.bagConfig ?? null,
   };
 }
 

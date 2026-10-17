@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.09.16.01
+ * @version 2026.10.16.01
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -61,7 +61,7 @@
  *
  */
 
-const TILES_VERSION = '2026.09.16.01';
+const TILES_VERSION = '2026.10.16.01';
 
 const TILES = {
 
@@ -534,23 +534,89 @@ const TILES = {
 // HELPERS
 // ---------------------------------------------------------------------------
 
+// Bag customization limits.
+const BAG_MAX_PER_TYPE = 4;
+
+/**
+ * Tile types a game creator may add to / remove from a bag, in TILES order.
+ * The Duke is never in the bag; enhanced tiles stay hidden until their
+ * special abilities are implemented.
+ */
+function editableTileTypes() {
+  return Object.keys(TILES).filter(k => k !== 'duke' && !TILES[k].enhanced);
+}
+
+/**
+ * The standard bag as a { type: count } map (bag copies only — startOnBoard
+ * copies are placed during setup and are not part of the bag).
+ */
+function defaultBagCounts() {
+  const counts = {};
+  for (const key of editableTileTypes()) {
+    const n = TILES[key].count - (TILES[key].startOnBoard ?? 0);
+    if (n > 0) counts[key] = n;
+  }
+  return counts;
+}
+
+/**
+ * Clean an untrusted { type: count } map (Firestore / sessionStorage / UI).
+ * Drops unknown or non-editable types, clamps counts to 0–BAG_MAX_PER_TYPE,
+ * and returns null if the result is not a usable bag (nothing in it).
+ */
+function sanitizeBagCounts(counts) {
+  if (!counts || typeof counts !== 'object') return null;
+  const clean = {};
+  let total = 0;
+  for (const key of editableTileTypes()) {
+    const n = Math.floor(Number(counts[key]));
+    if (!(n > 0)) continue;
+    clean[key] = Math.min(n, BAG_MAX_PER_TYPE);
+    total += clean[key];
+  }
+  return total > 0 ? clean : null;
+}
+
+/**
+ * Normalise a { p0, p1 } bag config. Returns null for the standard bag (so
+ * stored/compared configs stay minimal), otherwise a sanitized config. Any
+ * invalid side falls back to the standard bag.
+ */
+function sanitizeBagConfig(config) {
+  if (!config || typeof config !== 'object') return null;
+  const std    = JSON.stringify(defaultBagCounts());
+  const p0     = sanitizeBagCounts(config.p0) ?? defaultBagCounts();
+  const p1     = sanitizeBagCounts(config.p1) ?? defaultBagCounts();
+  if (JSON.stringify(p0) === std && JSON.stringify(p1) === std) return null;
+  return { p0, p1 };
+}
+
 /**
  * Returns the starting tile bag for one player.
- * Each entry is a tile type key; tiles with count > startOnBoard contribute
- * (count - startOnBoard) copies to the bag.
- * Enhanced tiles are excluded.
+ * Each entry is a tile type key. With no argument, uses the standard bag
+ * (tiles with count > startOnBoard contribute count - startOnBoard copies;
+ * enhanced tiles excluded). With a { type: count } map, contributes that many
+ * copies per type, in TILES key order so the output is deterministic.
  */
-function buildBag() {
+function buildBag(counts) {
+  const src = counts ?? defaultBagCounts();
   const bag = [];
-  for (const [key, tile] of Object.entries(TILES)) {
-    if (tile.enhanced) continue;
-    const onBoard = tile.startOnBoard ?? 0;
-    const inBag   = tile.count - onBoard;
-    for (let i = 0; i < inBag; i++) {
+  for (const key of editableTileTypes()) {
+    for (let i = 0; i < (src[key] ?? 0); i++) {
       bag.push(key);
     }
   }
   return bag;
+}
+
+/**
+ * Total copies of `type` one player owns under a bag config side
+ * ({ type: count } or null for standard): board-start copies plus bag copies.
+ */
+function tileTotalCount(type, counts) {
+  const onBoard = TILES[type].startOnBoard ?? 0;
+  const inBag = (counts ?? defaultBagCounts())[type] ?? 0;
+  return onBoard + inBag;
 }
 
 /**

@@ -600,11 +600,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.09.16.01"></script>
-<script src="js/tileRenderer.js?v=2026.09.16.01"></script>
-<script src="js/game.js?v=2026.09.16.01"></script>
-<script src="js/ai.js?v=2026.09.16.01"></script>
-<script src="js/firebase.js?v=2026.09.16.01"></script>
+<script src="js/tiles.js?v=2026.10.16.01"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.01"></script>
+<script src="js/game.js?v=2026.10.16.01"></script>
+<script src="js/ai.js?v=2026.10.16.01"></script>
+<script src="js/firebase.js?v=2026.10.16.01"></script>
 <script>
 'use strict';
 
@@ -612,7 +612,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.09.16.01';
+  const EXPECTED = '2026.10.16.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -1155,8 +1155,19 @@ async function _initOnlineGame() {
   // Load own name from localStorage (set on the lobby page).
   _myName = localStorage.getItem('duke_player_name') || '';
 
-  // Both players reconstruct identical state from the shared seed.
-  state      = createGame({ seed: _onlineSeed });
+  // Both players reconstruct identical state from the shared seed + bag config.
+  // If the config can't be fetched, stop: guessing the standard bag would
+  // desync a custom game.
+  let bagConfig;
+  try {
+    bagConfig = await getGameBagConfig(_onlineCode);
+  } catch (e) {
+    console.error('Could not load game settings:', e);
+    document.getElementById('status-msg').textContent =
+      'Could not load game settings. Please refresh.';
+    return;
+  }
+  state      = createGame({ seed: _onlineSeed, bagConfig });
   legalMoves = [];
   _initHistory(state);
 
@@ -1536,11 +1547,15 @@ function updateUI() {
 
   // Opponent name (above board)
   const oppNameEl = document.getElementById('opponent-name');
+  const bagTag    = state.bagConfig ? ' · custom bags' : '';
   if (_onlineMode) {
-    oppNameEl.textContent = 'vs. ' + (_opponentName || 'Opponent');
+    oppNameEl.textContent = 'vs. ' + (_opponentName || 'Opponent') + bagTag;
     oppNameEl.hidden = false;
   } else if (gameMode === 'ai') {
-    oppNameEl.textContent = 'vs. AI';
+    oppNameEl.textContent = 'vs. AI' + bagTag;
+    oppNameEl.hidden = false;
+  } else if (bagTag) {
+    oppNameEl.textContent = 'Custom bags';
     oppNameEl.hidden = false;
   } else {
     oppNameEl.hidden = true;
@@ -2182,12 +2197,20 @@ document.getElementById('diff-start').addEventListener('click', function () {
   startNewGame('ai', parseInt(document.getElementById('diff-slider').value));
 });
 
-function startNewGame(mode, depth) {
+/** Custom bag config handed over by the lobby (?bags=custom), or null for standard bags. */
+function _localBagConfig() {
+  if (_urlParams.get('bags') !== 'custom') return null;
+  try {
+    return sanitizeBagConfig(JSON.parse(sessionStorage.getItem('duke_local_bagconfig')));
+  } catch (_) { return null; }
+}
+
+function startNewGame(mode, depth, bagConfig) {
   gameMode   = mode;
   if (depth !== undefined) aiDepth = depth;
   aiThinking = false;
   document.getElementById('thinking').textContent = '';
-  state      = createGame();
+  state      = createGame({ bagConfig });
   legalMoves = [];
   _initHistory(state);
   resetUI();
@@ -2270,9 +2293,12 @@ function _getBagPopupData(playerIndex) {
   const ibCounts = countOf(inBagArr);
   const obCounts = countOf(onBoardArr);
 
+  // Per-type totals come from the game's bag config (standard bag when null),
+  // so tiles not in play (e.g. enhanced tiles) don't show up as "killed".
+  const counts = state.bagConfig ? state.bagConfig['p' + playerIndex] : null;
   const all = [];
   for (const type of Object.keys(TILES)) {
-    for (let i = 0; i < (TILES[type].count || 1); i++) all.push(type);
+    for (let i = 0; i < tileTotalCount(type, counts); i++) all.push(type);
   }
   all.sort((a, b) => (TILE_DISPLAY_NAMES[a] ?? a).localeCompare(TILE_DISPLAY_NAMES[b] ?? b));
 
@@ -2353,11 +2379,11 @@ if (_onlineMode) {
   _initOnlineGame().catch(console.error);
 } else if (_localModeParam === 'hotseat' || _localModeParam === 'ai') {
   // Arriving from index.html's Local branch with ?mode=hotseat or ?mode=ai&difficulty=N.
-  startNewGame(_localModeParam, _localModeParam === 'ai' ? _localDifficultyParam : undefined);
+  startNewGame(_localModeParam, _localModeParam === 'ai' ? _localDifficultyParam : undefined, _localBagConfig());
 }
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.09.16.01</div>
+<div class="version">2026.10.16.01</div>
 </body>
 </html>

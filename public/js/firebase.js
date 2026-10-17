@@ -1,10 +1,10 @@
 /**
  * firebase.js
  * Firebase initialisation and Firestore helpers for DukeOnline multiplayer.
- * @version 2026.09.16.01
+ * @version 2026.10.16.01
  *
- * Depends on: Firebase compat SDK v10+ (app, firestore) loaded via CDN
- * before this file.  Firebase Auth is NOT used — identity is established
+ * Depends on: tiles.js (sanitizeBagConfig) and Firebase compat SDK v10+
+ * (app, firestore) loaded via CDN before this file.  Firebase Auth is NOT used — identity is established
  * via username + PIN hash (see lookupOrCreateUser).
  *
  * ─── Public API ───────────────────────────────────────────────────────────────
@@ -23,8 +23,9 @@
  *     Adds/updates { code, player, seed } in the user's game list.
  *     userId must be echoed to satisfy the Firestore update rule.
  *
- *   createOnlineGame(seed, firstPlayer, playerName, userId)   → Promise<{ code }>
+ *   createOnlineGame(seed, firstPlayer, playerName, userId, bagConfig) → Promise<{ code }>
  *   joinOnlineGame(code, playerName, userId)                  → Promise<{ seed, firstPlayer }|null>
+ *   getGameBagConfig(code)                                    → Promise<{p0,p1}|null>
  *   listenToGame(code, callback)                              → unsubscribe()
  *   writeGameState(code, state, move)                         → Promise<void>
  *
@@ -38,6 +39,7 @@
  *     player1name: string
  *     seed:        number
  *     firstPlayer: 0 | 1
+ *     bagConfig:   { p0, p1 } | null   custom bag counts per player; null/absent = standard
  *     state:       object | null
  *     lastMove:    object | null
  *     createdAt:   Timestamp
@@ -52,7 +54,7 @@
 
 'use strict';
 
-const FIREBASE_VERSION = '2026.09.16.01';
+const FIREBASE_VERSION = '2026.10.16.01';
 
 const _FIREBASE_CONFIG = {
   apiKey:            'AIzaSyA_zWfQPC6Ij2y-9Z0ZmfNKKFWr1RQ33p0',
@@ -179,9 +181,10 @@ async function addGameToUser(username, userId, game) {
  * @param {number} firstPlayer   0 or 1
  * @param {string} playerName    Display name shown to opponent
  * @param {string} userId        Hash identity of player 0
+ * @param {object|null} [bagConfig]  Custom { p0, p1 } bag counts; null = standard bags
  * @returns {Promise<{ code: string }>}
  */
-async function createOnlineGame(seed, firstPlayer, playerName, userId) {
+async function createOnlineGame(seed, firstPlayer, playerName, userId, bagConfig) {
   if (!_db) throw new Error('initFirebase() not called');
 
   let code, ref, snap;
@@ -199,6 +202,7 @@ async function createOnlineGame(seed, firstPlayer, playerName, userId) {
     player1name: '',
     seed,
     firstPlayer,
+    bagConfig:   sanitizeBagConfig(bagConfig),   // null = standard bags
     state:       null,
     lastMove:    null,
     moveHistory: [],
@@ -236,6 +240,20 @@ async function joinOnlineGame(code, playerName, userId) {
   });
 
   return { seed: d.seed, firstPlayer: d.firstPlayer };
+}
+
+/**
+ * Fetch the bag configuration for a game (null = standard bags). Sanitized on
+ * read because the games collection is open-write. Rejects on network failure
+ * so callers don't silently fall back to a bag the opponent isn't using.
+ * @param {string} code
+ * @returns {Promise<object|null>}
+ */
+async function getGameBagConfig(code) {
+  if (!_db) throw new Error('initFirebase() not called');
+  const snap = await _gamesRef().doc(code).get();
+  if (!snap.exists) throw new Error('Game not found');
+  return sanitizeBagConfig(snap.data().bagConfig);
 }
 
 // ─── State serialisation ──────────────────────────────────────────────────────

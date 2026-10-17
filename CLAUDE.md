@@ -85,6 +85,8 @@ Fully playable. Online multiplayer, AI opponent, and hotseat mode all working. D
 
 [2026-05-12] Version scheme: `YYYY.MM.DD.NN`. Each JS file exports a named VERSION constant (`TILES_VERSION`, `TILE_RENDERER_VERSION`, `GAME_VERSION`, `AI_VERSION`, `FIREBASE_VERSION`). `<script src>` tags use `?v=VERSION` query strings for cache-busting. Both HTML files include a runtime version check that triggers a one-time reload (with `?_cb=timestamp` + `sessionStorage` guard) if any loaded version doesn't match `EXPECTED`.
 
+[2026-10-16] Bag customization: the game creator picks the bag at game start (Standard or Custom, 0–4 copies per non-Duke tile type, applied to both players; Duke + 2 Footmen start is fixed). Stored as `bagConfig` (`{ p0, p1 }` count maps, null = standard) on the Firestore game doc and in game state; `createGame({ seed, bagConfig })` builds bags from it, and clients fetch it via `getGameBagConfig` before building state (no fallback on failure — a wrong bag would desync). Local games pass it lobby → game page via `sessionStorage` + `?bags=custom`. Default-config bags are byte-identical to pre-change output for the same seed. Tiles flagged `enhanced` (Duchess, Oracle) stay out of the picker until their abilities (Summon, Divination) are implemented.
+
 ## Version Bump Checklist
 
 When bumping the version, update all of the following:
