@@ -1,7 +1,7 @@
 /**
  * tiles.js
  * Tile movement data for The Duke — base game.
- * @version 2026.10.16.05
+ * @version 2026.10.16.06
  *
  * COORDINATE SYSTEM
  * -----------------
@@ -70,12 +70,15 @@
  *                           Defaults to [2, 2] (center). Only needed for tiles
  *                           with a non-standard grid offset (e.g. Longbowman).
  *   sides        {Array}    Two side definitions. Index 0 = starting side (pawn icon).
+ *   playerSides  {object}   Optional. { 1: [side0, side1] } — faces used instead of
+ *                           `sides` for player 1, for tiles whose two players'
+ *                           tiles differ (Swashbuckler). Read via getTileActions().
  *
  * Each side is an array of action objects: { type, sq } or { type, dir }
  *
  */
 
-const TILES_VERSION = '2026.10.16.05';
+const TILES_VERSION = '2026.10.16.06';
 
 const TILES = {
 
@@ -576,6 +579,51 @@ const TILES = {
     ],
   },
 
+  // ---------------------------------------------------------------------------
+  // SWASHBUCKLER  (promo tile — optional, not in the default bag)
+  // The front is identical for both players; the backs are left-right mirror
+  // images. `sides` is the light tile (player 0); `playerSides[1]` is the grey
+  // tile (player 1), whose back swaps the strikes and moves across the tile.
+  // ---------------------------------------------------------------------------
+  swashbuckler: {
+    count: 1,
+    promo: true,
+    sides: [
+      // Side 0 — four corner jumps
+      [
+        { type: 'jump', sq: [-2,  2] },
+        { type: 'jump', sq: [ 2,  2] },
+        { type: 'jump', sq: [-2, -2] },
+        { type: 'jump', sq: [ 2, -2] },
+      ],
+      // Side 1 (light) — strike forward-left / back-right, move forward-right / back-left
+      [
+        { type: 'strike', sq: [-1,  1] },
+        { type: 'move',   sq: [ 1,  1] },
+        { type: 'move',   sq: [-1, -1] },
+        { type: 'strike', sq: [ 1, -1] },
+      ],
+    ],
+    playerSides: {
+      1: [
+        // Side 0 — same as the light tile
+        [
+          { type: 'jump', sq: [-2,  2] },
+          { type: 'jump', sq: [ 2,  2] },
+          { type: 'jump', sq: [-2, -2] },
+          { type: 'jump', sq: [ 2, -2] },
+        ],
+        // Side 1 (grey) — mirror image of the light back
+        [
+          { type: 'move',   sq: [-1,  1] },
+          { type: 'strike', sq: [ 1,  1] },
+          { type: 'strike', sq: [-1, -1] },
+          { type: 'move',   sq: [ 1, -1] },
+        ],
+      ],
+    },
+  },
+
 };
 
 // ---------------------------------------------------------------------------
@@ -689,9 +737,13 @@ function tileHasAbility(type, side, name) {
 
 /**
  * Returns the action array for a tile's current side.
- * @param {string} type  - tile key (e.g. 'knight')
- * @param {number} side  - 0 or 1
+ * Tiles whose faces differ per player (e.g. the Swashbuckler's mirrored
+ * backs) define `playerSides: { 1: [side0, side1] }`, used for player 1.
+ * @param {string} type    - tile key (e.g. 'knight')
+ * @param {number} side    - 0 or 1
+ * @param {number} [player] - 0 or 1 (default 0)
  */
-function getTileActions(type, side) {
-  return TILES[type].sides[side];
+function getTileActions(type, side, player) {
+  const t = TILES[type];
+  return (player === 1 && t.playerSides?.[1] ? t.playerSides[1] : t.sides)[side];
 }

@@ -1,7 +1,7 @@
 /**
  * tileRenderer.js
  * Procedural Canvas rendering for The Duke tile pieces.
- * @version 2026.10.16.05
+ * @version 2026.10.16.06
  *
  * Mirrors the physical tile layout:
  *
@@ -28,7 +28,7 @@
 
 'use strict';
 
-const TILE_RENDERER_VERSION = '2026.10.16.05';
+const TILE_RENDERER_VERSION = '2026.10.16.06';
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ const TILE_DISPLAY_NAMES = {
   duchess:    'Duchess',
   oracle:     'Oracle',
   jester:     'Jester',
+  swashbuckler: 'Swashbuckler',
 };
 
 // ─── Layout proportions (relative to tile size) ───────────────────────────────
@@ -81,7 +82,7 @@ function drawTile(ctx, x, y, size, type, side, player) {
   _drawBackground(ctx, x, y, size, L, C);
   _drawSeparator(ctx, x, y, size, L, C);
   _drawGrid(ctx, x + L.gridX, y + L.gridY, L, C);
-  _drawIcons(ctx, x + L.gridX, y + L.gridY, L, type, side, C);
+  _drawIcons(ctx, x + L.gridX, y + L.gridY, L, type, side, C, player);
   _drawName(ctx, x + L.nameX, y + L.nameY, L.nameW, L.nameH, type, C);
   _drawIllustration(ctx, x + L.illX, y, L.illW, size, type, C);
   _drawAbilityMark(ctx, x + L.illX, y, L.illW, size, type, side, C);
@@ -187,9 +188,9 @@ function _drawGrid(ctx, gx, gy, L, C) {
 
 // ─── Icon dispatch ────────────────────────────────────────────────────────────
 
-function _drawIcons(ctx, gx, gy, L, type, side, C) {
+function _drawIcons(ctx, gx, gy, L, type, side, C, player) {
   const { cellSize } = L;
-  const actions = (typeof TILES !== 'undefined') ? TILES[type]?.sides[side] : null;
+  const actions = (typeof TILES !== 'undefined' && TILES[type]) ? getTileActions(type, side, player) : null;
   if (!actions) return;
 
   // Tile's own square within the 5×5 display grid.
@@ -467,6 +468,7 @@ function _drawIllustration(ctx, ix, iy, iw, ih, type, C) {
     case 'duchess':    _illCrown(ctx, C);         break;
     case 'oracle':     _illCrescent(ctx, C);      break;
     case 'jester':     _illScepter(ctx, C);       break;
+    case 'swashbuckler': _illRapier(ctx, C);      break;
     default:           _illPole(ctx, C);          break;
   }
 
@@ -783,6 +785,47 @@ function _illCrown(ctx, C) {
   ctx.lineTo(cx + w / 2,   cTop + peakH);
   ctx.lineTo(cx + w / 2,   cBot);
   ctx.closePath();
+  ctx.fill();
+}
+
+// Rapier: long slender blade, swept guard, short grip and pommel (Swashbuckler)
+function _illRapier(ctx, C) {
+  const cx = 0.5, mg = _ILL_MG, w = _ILL_W;
+  const top = mg, bot = 1 - mg, h = bot - top;
+
+  const bladeW  = w * 0.12;
+  const guardY  = top + h * 0.62;
+  const guardW  = w * 0.92;
+  const guardH  = h * 0.035;
+  const gripW   = w * 0.20;
+  const gripH   = h * 0.20;
+  const pomR    = gripW * 0.85;
+
+  ctx.fillStyle = C.line;
+
+  // Blade
+  ctx.beginPath();
+  ctx.moveTo(cx,              top);
+  ctx.lineTo(cx + bladeW / 2, guardY);
+  ctx.lineTo(cx - bladeW / 2, guardY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Swept guard: wide bar with upturned ends
+  ctx.beginPath();
+  ctx.moveTo(cx - guardW / 2, guardY - guardH * 1.6);
+  ctx.lineTo(cx - guardW / 2 + guardW * 0.12, guardY - guardH * 0.2);
+  ctx.lineTo(cx + guardW / 2 - guardW * 0.12, guardY - guardH * 0.2);
+  ctx.lineTo(cx + guardW / 2, guardY - guardH * 1.6);
+  ctx.lineTo(cx + guardW / 2, guardY + guardH);
+  ctx.lineTo(cx - guardW / 2, guardY + guardH);
+  ctx.closePath();
+  ctx.fill();
+
+  // Grip and pommel
+  ctx.fillRect(cx - gripW / 2, guardY + guardH, gripW, gripH);
+  ctx.beginPath();
+  ctx.arc(cx, guardY + guardH + gripH + pomR * 0.7, pomR, 0, Math.PI * 2);
   ctx.fill();
 }
 

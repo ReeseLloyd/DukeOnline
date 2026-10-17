@@ -95,6 +95,8 @@ Fully playable. Online multiplayer, AI opponent, and hotseat mode all working. D
 
 [2026-10-16] Jester promo tile (2026.10.16.05). Patterns transcribed from `reference/pdfs/The_Duke_Expansion_Events-Print-n-Play.pdf` (movement/jump icons only, no new mechanics; the sheet's light and grey versions are just player colors). New tile flag `promo: true` = optional tile excluded from the default bag (like `enhanced`, but no special ability); the bag editor labels these "(promo)". Not yet done from the promo list: Specter (Events sheet) is an Expanded Play Terrain piece — auto-moves toward a token after each turn, enters after the first capture, captures any tile, uses Dread/skull icons — so it needs a terrain layer, not a bag tile. Swashbuckler, Shieldmaiden and Lancer still need pattern sources; the Jarl set's Shield Maiden uses Defense icons the engine lacks.
 
+[2026-10-16] Swashbuckler promo tile (2026.10.16.06). Source: user-supplied image of the light and grey tiles — identical fronts (four corner jumps), left-right mirrored backs, one version per player (light = player 0, grey = player 1). New optional tile field `playerSides: { 1: [side0, side1] }` overrides `sides` for player 1; always read faces through `getTileActions(type, side, player)` (used by `_movesForTile` and the renderer) rather than `TILES[type].sides` directly. Promo tile, off by default. Remaining from the promo list: Shieldmaiden (may need Defense icons), Lancer (no evidence it exists), Specter (terrain piece).
+
 ## Version Bump Checklist
 
 When bumping the version, update all of the following:

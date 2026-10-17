@@ -1,7 +1,7 @@
 /**
  * game.js
  * Core game logic for The Duke — base game.
- * @version 2026.10.16.05
+ * @version 2026.10.16.06
  *
  * Depends on: tiles.js  (TILES and buildBag must be in scope before this file)
  *
@@ -60,7 +60,7 @@
 
 'use strict';
 
-const GAME_VERSION = '2026.10.16.05';
+const GAME_VERSION = '2026.10.16.06';
 
 // ─── Seeded PRNG (Mulberry32) ─────────────────────────────────────────────────
 
@@ -605,7 +605,7 @@ function _isDukeThreatenedBy(board, attackedPlayer) {
  */
 function _movesForTile(board, col, row, piece, player) {
   const moves   = [];
-  const actions = TILES[piece.type].sides[piece.side];
+  const actions = getTileActions(piece.type, piece.side, player);
 
   // ── Collect command squares (transformed to board coords) ─────────────────
   const commandSqs = [];
