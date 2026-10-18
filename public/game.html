@@ -192,6 +192,20 @@
     }
 
     #draw-preview[hidden] { display: none; }
+    #draw-preview { flex-wrap: wrap; justify-content: center; }
+    #draw-preview > div:not(.face-pair) { text-align: center; }
+
+    /* Current side and reverse side of a tile, side by side */
+    .face-pair { display: flex; gap: 10px; }
+    .face-pair figure { margin: 0; text-align: center; }
+    .face-pair canvas { width: 90px; height: 90px; display: block; }
+    .face-pair figcaption {
+      font-size: 0.70rem;
+      opacity: 0.60;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
 
     #draw-tile-name {
       font-size: 1rem;
@@ -234,7 +248,7 @@
     }
 
     .divine-card.picked { border-color: #c8a020; background: rgba(200, 160, 32, 0.12); }
-    .divine-card canvas { width: 72px; height: 72px; }
+    .divine-card canvas { width: 64px; height: 64px; }
     .divine-name { font-size: 0.78rem; }
     .divine-toggle { padding: 2px 10px; font-size: 0.72rem; }
     .divine-toggle.destroy { background: #6a1a1a; border-color: #c04040; }
@@ -610,7 +624,10 @@
     </div>
 
     <div id="draw-preview" hidden>
-      <canvas id="draw-tile-canvas" width="90" height="90"></canvas>
+      <div class="face-pair">
+        <figure><canvas id="draw-tile-canvas" width="180" height="180"></canvas><figcaption>Now</figcaption></figure>
+        <figure><canvas id="draw-tile-back-canvas" width="180" height="180"></canvas><figcaption>Reverse</figcaption></figure>
+      </div>
       <div>
         <div id="draw-tile-name"></div>
         <div id="draw-tile-hint">Click a highlighted square to place it.</div>
@@ -690,11 +707,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.16.10"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.10"></script>
-<script src="js/game.js?v=2026.10.16.10"></script>
-<script src="js/ai.js?v=2026.10.16.10"></script>
-<script src="js/firebase.js?v=2026.10.16.10"></script>
+<script src="js/tiles.js?v=2026.10.16.11"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.11"></script>
+<script src="js/game.js?v=2026.10.16.11"></script>
+<script src="js/ai.js?v=2026.10.16.11"></script>
+<script src="js/firebase.js?v=2026.10.16.11"></script>
 <script>
 'use strict';
 
@@ -702,7 +719,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.16.10';
+  const EXPECTED = '2026.10.16.11';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -1092,14 +1109,27 @@ function _checkRestoreDrawMode() {
   enterMode('draw');
   const p    = state.currentPlayer;
   const next = peekBag(state, p);
-  if (next) {
-    const pc  = document.getElementById('draw-tile-canvas');
-    const sz  = 90;
-    pc.width  = sz; pc.height = sz;
-    drawTile(pc.getContext('2d'), 0, 0, sz, next, 0, p);
-    document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[next] ?? next;
-    document.getElementById('draw-preview').hidden = false;
+  if (next) _showDrawPreview(next, p);
+}
+
+/**
+ * Show the tile about to be placed from the bag: its current (starting) side
+ * on the left and its reverse on the right, in the player's colours.
+ * @param {string} type    Tile type
+ * @param {number} player  Owner (selects colours and any per-player faces)
+ * @param {string} [hint]  Caption text; defaults to the placement instruction
+ */
+function _showDrawPreview(type, player, hint) {
+  for (const [id, side] of [['draw-tile-canvas', 0], ['draw-tile-back-canvas', 1]]) {
+    const cv  = document.getElementById(id);
+    const c2d = cv.getContext('2d');
+    c2d.clearRect(0, 0, cv.width, cv.height);
+    drawTile(c2d, 0, 0, cv.width, type, side, player);
   }
+  document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[type] ?? type;
+  document.getElementById('draw-tile-hint').textContent =
+    hint || 'Click a highlighted square to place it.';
+  document.getElementById('draw-preview').hidden = false;
 }
 
 // ─── Online mode ──────────────────────────────────────────────────────────────
@@ -1570,10 +1600,14 @@ function _renderDivinePanel() {
       _renderDivinePanel(); render(); updateUI();
     });
 
-    const cv = document.createElement('canvas');
-    cv.width = 144; cv.height = 144;
-    drawTile(cv.getContext('2d'), 0, 0, 144, type, 0, p);
-    card.appendChild(cv);
+    // Front (placed side) above the reverse, so the choice can weigh both.
+    for (const side of [0, 1]) {
+      const cv = document.createElement('canvas');
+      cv.width = 128; cv.height = 128;
+      drawTile(cv.getContext('2d'), 0, 0, 128, type, side, p);
+      cv.title = side === 0 ? 'Placed side' : 'Reverse side';
+      card.appendChild(cv);
+    }
 
     const name = document.createElement('div');
     name.className   = 'divine-name';
@@ -1602,7 +1636,7 @@ function _renderDivinePanel() {
   });
 
   document.getElementById('divine-hint').textContent = uiDivinePick === null
-    ? 'Click the tile you want to place. The other two return to the bag unless you destroy them.'
+    ? 'Click the tile you want to place (each shows its placed side above its reverse). The other two return to the bag unless you destroy them.'
     : 'Click a highlighted square to place it. Toggle the other tiles between Return and Destroy.';
 }
 
@@ -2259,6 +2293,11 @@ function commitMove(move) {
     _pendingPreState = preState;
     legalMoves = [];   // block further moves until confirmed
     document.getElementById('pending-controls').hidden = false;
+    // Keep the tile's two faces on screen while a bag placement awaits confirmation.
+    if (move.action === 'draw') {
+      _showDrawPreview(preState.bags[preState.currentPlayer][0], preState.currentPlayer,
+                       'Placed — confirm, or change the placement.');
+    }
     _startPendingTimer();
     render(); updateUI();
   });
@@ -2347,6 +2386,7 @@ function submitTurn() {
   _pendingMove     = null;
   _pendingPreState = null;
   document.getElementById('pending-controls').hidden = true;
+  document.getElementById('draw-preview').hidden     = true;
 
   // Active-phase move confirmed.
   _recordHistory(preState, state, move);
@@ -2391,15 +2431,7 @@ function undoMove() {
     enterMode('draw');
     const p    = state.currentPlayer;
     const next = peekBag(state, p);
-    if (next) {
-      const pc  = document.getElementById('draw-tile-canvas');
-      const sz  = 90;
-      pc.width  = sz;
-      pc.height = sz;
-      drawTile(pc.getContext('2d'), 0, 0, sz, next, 0, p);
-      document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[next] ?? next;
-      document.getElementById('draw-preview').hidden = false;
-    }
+    if (next) _showDrawPreview(next, p);
   } else {
     legalMoves = getLegalMoves(state);
     resetUI();
@@ -2418,15 +2450,7 @@ document.getElementById('draw-btn').addEventListener('click', function () {
   // Reveal the tile that will be drawn so the player can plan placement
   const p    = state.currentPlayer;
   const next = peekBag(state, p);
-  if (next) {
-    const pc  = document.getElementById('draw-tile-canvas');
-    const sz  = 90;
-    pc.width  = sz;
-    pc.height = sz;
-    drawTile(pc.getContext('2d'), 0, 0, sz, next, 0, p);
-    document.getElementById('draw-tile-name').textContent = TILE_DISPLAY_NAMES[next] ?? next;
-    document.getElementById('draw-preview').hidden = false;
-  }
+  if (next) _showDrawPreview(next, p);
 
   render(); updateUI();
 });
@@ -2798,6 +2822,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.16.10</div>
+<div class="version">2026.10.16.11</div>
 </body>
 </html>
