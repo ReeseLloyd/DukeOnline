@@ -367,21 +367,59 @@
 
     /* ── Bag popup ───────────────────────────────────────────────────────────── */
 
+    /* Wider than the other panels: tile list on the left, front/back preview on the right. */
+    #bag-overlay .panel { max-width: 540px; }
+
+    #bag-body {
+      display: flex;
+      gap: 16px;
+      width: 100%;
+      align-items: flex-start;
+    }
+
     #bag-list {
       list-style: none;
       text-align: left;
       max-height: 55vh;
       overflow-y: auto;
       padding: 4px 0;
-      width: 100%;
+      flex: 1;
+      min-width: 0;
     }
 
     #bag-list li {
-      padding: 3px 0;
+      padding: 3px 6px;
       font-size: 0.9rem;
+      border-radius: 3px;
+      cursor: pointer;
     }
 
+    #bag-list li.sel { background: rgba(200, 160, 32, 0.18); }
+    #bag-list li:focus-visible { outline: 1px solid #c8a020; }
+
     .bag-killed { opacity: 0.45; }
+
+    #bag-preview {
+      flex: 0 0 min(160px, 40%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #bag-prev-name { font-size: 0.95rem; font-weight: bold; color: #c8a020; min-height: 1.3em; }
+
+    #bag-preview canvas {
+      width: min(150px, 100%, 20vh);
+      height: auto;
+      aspect-ratio: 1;
+    }
+
+    .bag-prev-cap { font-size: 0.70rem; opacity: 0.55; letter-spacing: 0.08em; text-transform: uppercase; }
+
+    @media (max-width: 480px) {
+      #bag-overlay .panel { padding: 24px 14px; }
+    }
 
     #bag-close {
       position: absolute;
@@ -639,15 +677,24 @@
   <div class="panel">
     <button id="bag-close" title="Close">&#x2715;</button>
     <h2 id="bag-title"></h2>
-    <ul id="bag-list"></ul>
+    <div id="bag-body">
+      <ul id="bag-list"></ul>
+      <div id="bag-preview">
+        <div id="bag-prev-name"></div>
+        <canvas id="bag-prev-front" width="300" height="300"></canvas>
+        <div class="bag-prev-cap">Front</div>
+        <canvas id="bag-prev-back" width="300" height="300"></canvas>
+        <div class="bag-prev-cap">Back</div>
+      </div>
+    </div>
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.16.09"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.09"></script>
-<script src="js/game.js?v=2026.10.16.09"></script>
-<script src="js/ai.js?v=2026.10.16.09"></script>
-<script src="js/firebase.js?v=2026.10.16.09"></script>
+<script src="js/tiles.js?v=2026.10.16.10"></script>
+<script src="js/tileRenderer.js?v=2026.10.16.10"></script>
+<script src="js/game.js?v=2026.10.16.10"></script>
+<script src="js/ai.js?v=2026.10.16.10"></script>
+<script src="js/firebase.js?v=2026.10.16.10"></script>
 <script>
 'use strict';
 
@@ -655,7 +702,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.16.09';
+  const EXPECTED = '2026.10.16.10';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -2670,19 +2717,49 @@ function _openBagPopup(playerIndex) {
   const list = document.getElementById('bag-list');
   list.innerHTML = '';
 
+  // Preview on the right: hovering a row shows that tile's front and back (in
+  // this player's colours); clicking or focusing a row pins it so the preview
+  // stays put when the pointer leaves the list (and works on touch screens).
+  let pinned = null;
+  function pin(li) {
+    list.querySelectorAll('li.sel').forEach(x => x.classList.remove('sel'));
+    li.classList.add('sel');
+    pinned = li.dataset.type;
+    _showBagPreview(pinned, playerIndex);
+  }
+
   function addItem(type, s) {
     const li = document.createElement('li');
     const dn = TILE_DISPLAY_NAMES[type] ?? type;
     if (s === 'killed')       li.innerHTML = '<span class="bag-killed">\u2715 <s>' + dn + '</s></span>';
     else if (s === 'onboard') li.innerHTML = '<strong>' + dn + '</strong>';
     else                      li.innerHTML = '\u25ef ' + dn;
+    li.dataset.type = type;
+    li.tabIndex     = 0;
+    li.addEventListener('mouseenter', () => _showBagPreview(type, playerIndex));
+    li.addEventListener('click',      () => pin(li));
+    li.addEventListener('focus',      () => pin(li));
     list.appendChild(li);
   }
   for (const t of killed)  addItem(t, 'killed');
   for (const t of onBoard) addItem(t, 'onboard');
   for (const t of inBag)   addItem(t, 'inbag');
 
+  list.onmouseleave = () => { if (pinned) _showBagPreview(pinned, playerIndex); };
+  if (list.firstElementChild) pin(list.firstElementChild);
+
   document.getElementById('bag-overlay').hidden = false;
+}
+
+/** Draw both faces of a tile into the bag popup's preview, in the given player's colours. */
+function _showBagPreview(type, playerIndex) {
+  document.getElementById('bag-prev-name').textContent = TILE_DISPLAY_NAMES[type] ?? type;
+  for (const [id, side] of [['bag-prev-front', 0], ['bag-prev-back', 1]]) {
+    const cv  = document.getElementById(id);
+    const c2d = cv.getContext('2d');
+    c2d.clearRect(0, 0, cv.width, cv.height);
+    drawTile(c2d, 0, 0, cv.width, type, side, playerIndex);
+  }
 }
 
 // ─── Timeline nav buttons ─────────────────────────────────────────────────────
@@ -2721,6 +2798,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.16.09</div>
+<div class="version">2026.10.16.10</div>
 </body>
 </html>
