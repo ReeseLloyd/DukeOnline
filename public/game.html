@@ -76,8 +76,10 @@
       white-space: nowrap;
     }
 
-    button:hover:not(:disabled) { background: #5a3090; }
+    button:hover:not(:disabled):not(.ability-off) { background: #5a3090; }
     button:disabled { opacity: 0.38; cursor: default; }
+    /* Summon / Divination while unavailable: greyed but still clickable, so a tap explains why */
+    button.ability-off { opacity: 0.38; cursor: default; }
 
     /* ── Game-over card ─────────────────────────────────────────────────────── */
 
@@ -598,8 +600,8 @@
 
     <div id="controls">
       <button id="draw-btn" disabled>Draw from Bag</button>
-      <button id="summon-btn" hidden title="Flip your Duke and bring a tile with the Summon ability next to it">Summon</button>
-      <button id="divine-btn" hidden title="Flip the Oracle, reveal three tiles from your bag and place one">Divination</button>
+      <button id="summon-btn" hidden>Summon</button>
+      <button id="divine-btn" hidden>Divination</button>
       <button id="cancel-btn" hidden>Cancel</button>
     </div>
 
@@ -707,11 +709,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.16.11"></script>
-<script src="js/tileRenderer.js?v=2026.10.16.11"></script>
-<script src="js/game.js?v=2026.10.16.11"></script>
-<script src="js/ai.js?v=2026.10.16.11"></script>
-<script src="js/firebase.js?v=2026.10.16.11"></script>
+<script src="js/tiles.js?v=2026.10.18.01"></script>
+<script src="js/tileRenderer.js?v=2026.10.18.01"></script>
+<script src="js/game.js?v=2026.10.18.01"></script>
+<script src="js/ai.js?v=2026.10.18.01"></script>
+<script src="js/firebase.js?v=2026.10.18.01"></script>
 <script>
 'use strict';
 
@@ -719,7 +721,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.16.11';
+  const EXPECTED = '2026.10.18.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -1501,8 +1503,10 @@ function playMoveAnimation(preState, postState, move, onDone) {
 
 // ─── UI state ─────────────────────────────────────────────────────────────────
 //   mode:       'idle' | 'selected' | 'cmd-to' | 'draw' | 'summon-from' | 'summon-to'
-//               | 'divine-from' | 'divine'
-//   uiSelected: [c, r]  — selected tile (move / strike / command origin)
+//               | 'divine'
+//   uiSelected: [c, r]  — selected tile (move / strike / command origin, or the
+//               Duke / Oracle / summoning tile whose ability button is offered)
+//   uiNote:     transient status line, e.g. why an ability button is unavailable
 //   uiCmdrPos:  [c, r]  — commander tile (while choosing commanded tile destination)
 //   uiCmdFrom:  [c, r]  — commanded tile's current square (while choosing destination)
 //   uiSummonFrom: [c, r] — Duchess being summoned (while choosing her destination)
@@ -1512,6 +1516,7 @@ let uiSelected = null;
 let uiCmdrPos  = null;
 let uiCmdFrom  = null;
 let uiSummonFrom = null;
+let uiNote     = '';
 //   uiDivineFrom:    [c, r]  — Oracle being used (Divination)
 //   uiDivinePick:    index (0-2) of the revealed tile to place, or null until chosen
 //   uiDivineDestroy: Set of revealed indices to destroy (the rest are returned to the bag)
@@ -1520,7 +1525,7 @@ let uiDivinePick    = null;
 let uiDivineDestroy = new Set();
 
 function resetUI() {
-  uiMode = 'idle'; uiSelected = null; uiCmdrPos = null; uiCmdFrom = null; uiSummonFrom = null;
+  uiMode = 'idle'; uiSelected = null; uiCmdrPos = null; uiCmdFrom = null; uiSummonFrom = null; uiNote = '';
   uiDivineFrom = null; uiDivinePick = null; uiDivineDestroy = new Set();
   document.getElementById('cancel-btn').hidden = true;
   document.getElementById('draw-preview').hidden = true;
@@ -1559,6 +1564,7 @@ function _showFlipPreview(col, row, hint) {
 
 function enterMode(mode) {
   uiMode = mode;
+  uiNote = '';
   // Cancel is suppressed in draw mode: once "Draw from Bag" is clicked the
   // player has committed to placing the tile (per the rules). Same for
   // Divination once the three tiles have been revealed.
@@ -1704,12 +1710,6 @@ function computeHighlights() {
     return h;
   }
 
-  if (uiMode === 'divine-from') {
-    for (const m of legalMoves)
-      if (m.action === 'divine') h.set(cellKey(...m.from), 'cmd-from');
-    return h;
-  }
-
   if (uiMode === 'divine' && uiDivineFrom) {
     h.set(cellKey(...uiDivineFrom), 'selected');
     if (uiDivinePick !== null) {
@@ -1850,13 +1850,101 @@ function render() {
 
 // ─── Status / UI text ─────────────────────────────────────────────────────────
 
+// ─── Ability buttons (Summon / Divination) ────────────────────────────────────
+// Each ability belongs to the tile that flips: Summon to the Duke (the summoning
+// tile — Duchess, Lancer — is the one that relocates, so selecting it also works),
+// Divination to the Oracle. A button is shown once the current player has a tile
+// with that ability on the board, and is live only while the right tile is selected.
+// _summonAbility() / _divineAbility() return null (no such tile in play) or
+// { enabled, reason, ... } — `reason` explains a greyed button; `blocked` marks
+// "right tile selected, but the ability can't be used".
+
+function _hasAbilityTile(p, ability) {
+  return state.board.some(row => row.some(c =>
+    c && c.player === p && (tileHasAbility(c.type, 0, ability) || tileHasAbility(c.type, 1, ability))));
+}
+
+/** True for tiles that can be selected just to reach an ability button. */
+function _isAbilityTile(cell, p) {
+  if (cell.type === 'duke') return _hasAbilityTile(p, 'summon');
+  return [0, 1].some(s => tileHasAbility(cell.type, s, 'summon') || tileHasAbility(cell.type, s, 'divination'));
+}
+
+function _selectedCell() {
+  return uiMode === 'selected' && uiSelected ? state.board[uiSelected[1]][uiSelected[0]] : null;
+}
+
+/** Why no ability move exists from the selected tile, given it's the right kind of tile. */
+function _abilityBlockedReason(name, tiles) {
+  const p    = state.currentPlayer;
+  const duke = _findDuke(state.board, p);
+  if (duke && _adjacentEmpty(state.board, duke[0], duke[1]).length === 0)
+    return name + ' unavailable: no open square next to your Duke.';
+  const frozen = getFrozenSquares(state);
+  if (tiles.length > 0 && tiles.every(([c, r]) => frozen.has(c + ',' + r)))
+    return name + ' unavailable: the tile is frozen by Dread.';
+  return name + ' unavailable: it would leave your Duke open to capture.';
+}
+
+function _summonAbility() {
+  const p = state.currentPlayer;
+  if (!_hasAbilityTile(p, 'summon')) return null;
+  const sel = _selectedCell();
+  if (!sel || !(sel.type === 'duke' || tileHasAbility(sel.type, sel.side, 'summon')))
+    return { enabled: false, reason: 'Select your Duke or a summoning tile to use Summon.' };
+
+  const [sc, sr] = uiSelected;
+  const froms = [];
+  for (const m of legalMoves) {
+    if (m.action !== 'summon') continue;
+    if (sel.type !== 'duke' && (m.from[0] !== sc || m.from[1] !== sr)) continue;
+    if (!froms.some(f => f[0] === m.from[0] && f[1] === m.from[1])) froms.push(m.from);
+  }
+  if (froms.length > 0) return { enabled: true, froms };
+
+  const tiles = [];
+  state.board.forEach((row, r) => row.forEach((c, col) => {
+    if (c && c.player === p && tileHasAbility(c.type, c.side, 'summon')) tiles.push([col, r]);
+  }));
+  return { enabled: false, blocked: true, reason: _abilityBlockedReason('Summon', sel.type === 'duke' ? tiles : [[sc, sr]]) };
+}
+
+function _divineAbility() {
+  const p = state.currentPlayer;
+  if (!_hasAbilityTile(p, 'divination')) return null;
+  const sel = _selectedCell();
+  if (!sel || !([0, 1].some(s => tileHasAbility(sel.type, s, 'divination'))))
+    return { enabled: false, reason: 'Select your Oracle to use Divination.' };
+
+  const [sc, sr] = uiSelected;
+  if (legalMoves.some(m => m.action === 'divine' && m.from[0] === sc && m.from[1] === sr))
+    return { enabled: true, from: [sc, sr] };
+
+  if (!tileHasAbility(sel.type, sel.side, 'divination'))
+    return { enabled: false, blocked: true, reason: 'Divination unavailable: move the Oracle once to flip it first.' };
+  if (state.bags[p].length === 0)
+    return { enabled: false, blocked: true, reason: 'Divination unavailable: your bag is empty.' };
+  return { enabled: false, blocked: true, reason: _abilityBlockedReason('Divination', [[sc, sr]]) };
+}
+
+/** Show / grey / hide an ability button for the current UI mode. */
+function _applyAbilityButton(btn, ability, tip) {
+  btn.hidden = !ability;
+  if (!ability) return;
+  const free = uiMode === 'idle' || uiMode === 'selected';
+  btn.disabled = !free;                                     // mid-action: fully locked
+  btn.classList.toggle('ability-off', free && !ability.enabled);
+  btn.title = free && !ability.enabled ? ability.reason : tip;
+}
+
+
 function updateUI() {
   const playerEl = document.getElementById('status-player');
   const msgEl    = document.getElementById('status-msg');
   const drawBtn  = document.getElementById('draw-btn');
   const summonBtn = document.getElementById('summon-btn');
   const divineBtn = document.getElementById('divine-btn');
-  summonBtn.hidden = true;   // re-shown below only on the active player's free turn
+  summonBtn.hidden = true;   // re-shown below only on the active player's turn
   divineBtn.hidden = true;
 
   // History browsing: show which turn we're viewing and lock all game controls.
@@ -2034,16 +2122,24 @@ function updateUI() {
 
   if (uiMode === 'draw')
     msgEl.textContent = 'Draw committed — click an adjacent square to place it.';
-  else if (uiMode === 'selected')
-    msgEl.textContent = 'Choose a destination, or click elsewhere to cancel.';
+  else if (uiMode === 'selected') {
+    const [sc, sr] = uiSelected;
+    const hasMoves = legalMoves.some(m =>
+      (m.action === 'move' || m.action === 'strike') && m.from[0] === sc && m.from[1] === sr ||
+      m.action === 'command' && m.commander[0] === sc && m.commander[1] === sr);
+    // Ability tiles: say why a greyed ability button can't be used.
+    const notes = [_summonAbility(), _divineAbility()]
+      .filter(a => a && a.blocked).map(a => a.reason);
+    msgEl.textContent = (hasMoves
+      ? 'Choose a destination, or click elsewhere to cancel.'
+      : 'This tile has no moves.') + (notes.length ? ' ' + notes.join(' ') : '');
+  }
   else if (uiMode === 'cmd-to')
     msgEl.textContent = 'Choose a destination for the commanded tile.';
   else if (uiMode === 'summon-from')
     msgEl.textContent = 'Choose the tile to summon.';
   else if (uiMode === 'summon-to')
     msgEl.textContent = 'Choose an open square next to your Duke (your Duke will flip).';
-  else if (uiMode === 'divine-from')
-    msgEl.textContent = 'Choose the Oracle to use.';
   else if (uiMode === 'divine')
     msgEl.textContent = uiDivinePick === null
       ? 'Divination committed — choose a tile to place.'
@@ -2052,6 +2148,7 @@ function updateUI() {
     msgEl.textContent = 'Your Duke is in Guard — you must resolve the threat.';
   else
     msgEl.textContent = 'Select a tile to move, or draw from the bag.';
+  if (uiNote && (uiMode === 'idle' || uiMode === 'selected')) msgEl.textContent = uiNote;
 
   // Draw button
   const bagSize = state.bags[p].length;
@@ -2066,13 +2163,12 @@ function updateUI() {
 
   drawBtn.disabled = !canDraw || uiMode !== 'idle' || isAiTurn;
 
-  // Summon button: only when a tile with the Summon ability has a legal summon.
-  summonBtn.hidden   = isAiTurn || !legalMoves.some(m => m.action === 'summon');
-  summonBtn.disabled = uiMode !== 'idle';
-
-  // Divination button: only when an Oracle on its non-starting side can act.
-  divineBtn.hidden   = isAiTurn || !legalMoves.some(m => m.action === 'divine');
-  divineBtn.disabled = uiMode !== 'idle';
+  // Summon / Divination: shown once such a tile is in play, live only when the
+  // right tile is selected (see the Ability buttons section).
+  _applyAbilityButton(summonBtn, isAiTurn ? null : _summonAbility(),
+    'Flip your Duke and bring a tile with the Summon ability next to it');
+  _applyAbilityButton(divineBtn, isAiTurn ? null : _divineAbility(),
+    'Flip the Oracle, reveal three tiles from your bag and place one');
 }
 
 function showGameOver() {
@@ -2117,6 +2213,7 @@ canvas.addEventListener('mousemove', function (evt) {
 });
 
 function handleClick(col, row) {
+  uiNote = '';
   if (_isViewingHistory()) {
     // Board is read-only while browsing history, but allow tile inspection.
     _showFlipPreview(col, row, 'Reverse side');
@@ -2185,13 +2282,7 @@ function handleClick(col, row) {
     return;
   }
 
-  // ── Divination: choose which Oracle, then (after the reveal) a square ───────
-  if (uiMode === 'divine-from') {
-    const m = legalMoves.find(m => m.action === 'divine' && m.from[0] === col && m.from[1] === row);
-    if (m) { _beginDivine([col, row]); } else { resetUI(); }
-    render(); updateUI();
-    return;
-  }
+  // ── Divination: after the reveal, choose a square ───────────────────────────
   if (uiMode === 'divine' && uiDivineFrom) {
     if (uiDivinePick === null) return;   // pick a tile in the panel first
     const m = _findDivineMove([col, row]);
@@ -2274,7 +2365,7 @@ function trySelect(col, row) {
     (m.action === 'move'   || m.action === 'strike') && m.from[0] === col && m.from[1] === row ||
     m.action === 'command' && m.commander[0] === col && m.commander[1] === row
   );
-  if (!hasMoves) return;
+  if (!hasMoves && !_isAbilityTile(cell, p)) return;
 
   uiSelected = [col, row];
   enterMode('selected');
@@ -2456,14 +2547,13 @@ document.getElementById('draw-btn').addEventListener('click', function () {
 });
 
 document.getElementById('summon-btn').addEventListener('click', function () {
-  const froms = [];
-  for (const m of legalMoves) {
-    if (m.action === 'summon' && !froms.some(f => f[0] === m.from[0] && f[1] === m.from[1])) froms.push(m.from);
-  }
-  if (froms.length === 0) return;
+  const a = _summonAbility();
+  if (!a) return;
+  if (!a.enabled) { uiNote = a.reason; updateUI(); return; }
   document.getElementById('flip-preview').hidden = true;
-  if (froms.length === 1) { uiSummonFrom = froms[0]; enterMode('summon-to'); }
-  else                    { enterMode('summon-from'); }
+  uiSelected = null;
+  if (a.froms.length === 1) { uiSummonFrom = a.froms[0]; enterMode('summon-to'); }
+  else                      { enterMode('summon-from'); }
   render(); updateUI();
 });
 
@@ -2474,14 +2564,12 @@ function _beginDivine(from) {
 }
 
 document.getElementById('divine-btn').addEventListener('click', function () {
-  const froms = [];
-  for (const m of legalMoves) {
-    if (m.action === 'divine' && !froms.some(f => f[0] === m.from[0] && f[1] === m.from[1])) froms.push(m.from);
-  }
-  if (froms.length === 0) return;
+  const a = _divineAbility();
+  if (!a) return;
+  if (!a.enabled) { uiNote = a.reason; updateUI(); return; }
   document.getElementById('flip-preview').hidden = true;
-  if (froms.length === 1) { _beginDivine(froms[0]); }
-  else                    { enterMode('divine-from'); }
+  uiSelected = null;
+  _beginDivine(a.from);
   render(); updateUI();
 });
 
@@ -2822,6 +2910,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.16.11</div>
+<div class="version">2026.10.18.01</div>
 </body>
 </html>
