@@ -474,17 +474,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
 <!-- Tile renderer for favicon -->
-<script src="js/tiles.js?v=2026.10.18.01"></script>
-<script src="js/tileRenderer.js?v=2026.10.18.01"></script>
+<script src="js/tiles.js?v=2026.10.21.01"></script>
+<script src="js/tileRenderer.js?v=2026.10.21.01"></script>
 
-<script src="js/firebase.js?v=2026.10.18.01"></script>
+<script src="js/firebase.js?v=2026.10.21.01"></script>
 
 <script>
 'use strict';
 
 // ─── Version check ────────────────────────────────────────────────────────────
 (function () {
-  const EXPECTED = '2026.10.18.01';
+  const EXPECTED = '2026.10.21.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && FIREBASE_VERSION      === EXPECTED;
@@ -847,7 +847,9 @@ async function _createOnlineGameFlow(bagConfig) {
 
     saveMyGame(code, 0, _createSeed);
     // Also persist to Firestore so the game appears on other devices.
-    addGameToUser(username, userId, { code, player: 0, seed: _createSeed }).catch(console.error);
+    try {
+      await addGameToUser(username, userId, { code, player: 0, seed: _createSeed });
+    } catch (e) { console.error(e); }
 
     document.getElementById('online-code-value').textContent = code;
     _playStep('online-created');
@@ -1078,15 +1080,23 @@ async function handleJoin() {
     await initFirebase();
     const result = await joinOnlineGame(raw, username, userId);
 
-    if (!result) {
-      showError('Game not found or already full.');
+    if (result.error) {
+      showError({
+        not_found: 'Game not found. Check the code.',
+        full:      'That game already has two players.',
+        finished:  'That game has already finished.',
+      }[result.error] || 'Could not join that game.');
       joinBtn.disabled = false;
       return;
     }
 
-    saveMyGame(raw, 1, result.seed);
-    addGameToUser(username, userId, { code: raw, player: 1, seed: result.seed }).catch(console.error);
-    window.location.href = `game.html?code=${raw}&player=1&seed=${result.seed}`;
+    saveMyGame(raw, result.player, result.seed);
+    // Await so the redirect below can't cancel the write; failure is non-fatal
+    // (game.html also self-heals the list on load).
+    try {
+      await addGameToUser(username, userId, { code: raw, player: result.player, seed: result.seed });
+    } catch (e) { console.error(e); }
+    window.location.href = `game.html?code=${raw}&player=${result.player}&seed=${result.seed}`;
 
   } catch (e) {
     console.error(e);
@@ -1109,6 +1119,6 @@ if (_getUsername() && _getUserId()) {
 
 </script>
 
-<div class="version">2026.10.18.01</div>
+<div class="version">2026.10.21.01</div>
 </body>
 </html>

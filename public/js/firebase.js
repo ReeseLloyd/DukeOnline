@@ -1,7 +1,7 @@
 /**
  * firebase.js
  * Firebase initialisation and Firestore helpers for DukeOnline multiplayer.
- * @version 2026.10.18.01
+ * @version 2026.10.21.01
  *
  * Depends on: tiles.js (sanitizeBagConfig) and Firebase compat SDK v10+
  * (app, firestore) loaded via CDN before this file.  Firebase Auth is NOT used — identity is established
@@ -23,8 +23,12 @@
  *     Adds/updates { code, player, seed } in the user's game list.
  *     userId must be echoed to satisfy the Firestore update rule.
  *
+ *   ensureGameInUserList(username, userId, game)              → Promise<void>
+ *     Adds the game to the user's list only if missing and the game doc
+ *     confirms the user is that player (self-heal on game load).
+ *
  *   createOnlineGame(seed, firstPlayer, playerName, userId, bagConfig) → Promise<{ code }>
- *   joinOnlineGame(code, playerName, userId)                  → Promise<{ seed, firstPlayer }|null>
+ *   joinOnlineGame(code, playerName, userId)                  → Promise<{ seed, firstPlayer, player, rejoined }|{ error }>
  *   getGameBagConfig(code)                                    → Promise<{p0,p1}|null>
  *   listenToGame(code, callback)                              → unsubscribe()
  *   writeGameState(code, state, move)                         → Promise<void>
@@ -54,7 +58,7 @@
 
 'use strict';
 
-const FIREBASE_VERSION = '2026.10.18.01';
+const FIREBASE_VERSION = '2026.10.21.01';
 
 const _FIREBASE_CONFIG = {
   apiKey:            'AIzaSyA_zWfQPC6Ij2y-9Z0ZmfNKKFWr1RQ33p0',
@@ -171,6 +175,28 @@ async function addGameToUser(username, userId, game) {
   });
 }
 
+/**
+ * Self-heal: make sure a game the user is genuinely part of appears in their
+ * Firestore game list. Checks the game doc's player uid so a hand-edited URL
+ * can't add someone else's game. No-op (no write) when already listed.
+ * @param {string} username
+ * @param {string} userId
+ * @param {{ code: string, player: number, seed: number }} game
+ */
+async function ensureGameInUserList(username, userId, game) {
+  if (!_db) throw new Error('initFirebase() not called');
+
+  const userSnap = await _usersRef().doc(username.toLowerCase()).get();
+  if (!userSnap.exists) return;
+  if ((userSnap.data().games || []).some(g => g.code === game.code)) return;
+
+  const gameSnap = await _gamesRef().doc(game.code).get();
+  if (!gameSnap.exists) return;
+  if (gameSnap.data()['player' + game.player + 'uid'] !== userId) return;
+
+  await addGameToUser(username, userId, game);
+}
+
 // ─── Game CRUD ────────────────────────────────────────────────────────────────
 
 /**
@@ -214,23 +240,34 @@ async function createOnlineGame(seed, firstPlayer, playerName, userId, bagConfig
 }
 
 /**
- * Join an existing game as player 1.
+ * Join an existing game as player 1, or rejoin one the caller is already in.
  * @param   {string} code
  * @param   {string} playerName
- * @param   {string} userId     Hash identity of player 1
- * @returns {Promise<{ seed: number, firstPlayer: number }|null>}
- *          null if the game is not found, already full, or not in 'waiting' status.
+ * @param   {string} userId     Hash identity of the joining player
+ * @returns {Promise<{ seed: number, firstPlayer: number, player: number, rejoined: boolean }
+ *                   |{ error: 'not_found'|'full'|'finished' }>}
+ *          error 'full' = someone else already holds player 1; 'finished' =
+ *          the game has ended and the caller was not a player in it.
  */
 async function joinOnlineGame(code, playerName, userId) {
   if (!_db) throw new Error('initFirebase() not called');
 
   const ref  = _gamesRef().doc(code.toUpperCase().trim());
   const snap = await ref.get();
-  if (!snap.exists)           return null;
+  if (!snap.exists) return { error: 'not_found' };
 
   const d = snap.data();
-  if (d.status !== 'waiting') return null;
-  if (d.player1uid !== null)  return null;
+
+  // Already a player in this game (e.g. it is missing from My Games): rejoin.
+  if (userId) {
+    const player = d.player0uid === userId ? 0 : d.player1uid === userId ? 1 : null;
+    if (player !== null) {
+      return { seed: d.seed, firstPlayer: d.firstPlayer, player, rejoined: true };
+    }
+  }
+
+  if (d.status !== 'waiting') return { error: d.status === 'gameover' ? 'finished' : 'full' };
+  if (d.player1uid !== null)  return { error: 'full' };
 
   await ref.update({
     player1uid:  userId || '',
@@ -239,7 +276,7 @@ async function joinOnlineGame(code, playerName, userId) {
     updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
   });
 
-  return { seed: d.seed, firstPlayer: d.firstPlayer };
+  return { seed: d.seed, firstPlayer: d.firstPlayer, player: 1, rejoined: false };
 }
 
 /**
