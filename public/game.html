@@ -709,11 +709,11 @@
   </div>
 </div>
 
-<script src="js/tiles.js?v=2026.10.21.01"></script>
-<script src="js/tileRenderer.js?v=2026.10.21.01"></script>
-<script src="js/game.js?v=2026.10.21.01"></script>
-<script src="js/ai.js?v=2026.10.21.01"></script>
-<script src="js/firebase.js?v=2026.10.21.01"></script>
+<script src="js/tiles.js?v=2026.10.29.01"></script>
+<script src="js/tileRenderer.js?v=2026.10.29.01"></script>
+<script src="js/game.js?v=2026.10.29.01"></script>
+<script src="js/ai.js?v=2026.10.29.01"></script>
+<script src="js/firebase.js?v=2026.10.29.01"></script>
 <script>
 'use strict';
 
@@ -721,7 +721,7 @@
 // If any JS file is stale (cached at an old version), reload once with a
 // cache-busting timestamp so the browser fetches the current files.
 (function () {
-  const EXPECTED = '2026.10.21.01';
+  const EXPECTED = '2026.10.29.01';
   const ok = TILES_VERSION        === EXPECTED
           && TILE_RENDERER_VERSION === EXPECTED
           && GAME_VERSION          === EXPECTED
@@ -1151,6 +1151,8 @@ const _localModeParam       = _urlParams.get('mode');
 const _localDifficultyParam = parseInt(_urlParams.get('difficulty')) || undefined;
 
 let _ignoreNextSnapshot = false;  // skip the echo of our own Firestore write
+let _remoteAnimating    = false;  // an opponent-move animation (from a snapshot) is in flight
+let _stagedTurn         = -1;     // turn of our own staged move, so older snapshots can't clobber it
 let _onlineUnsub        = null;   // Firestore listener unsubscribe fn
 let _myName             = '';     // from localStorage; shown in status bar
 let _opponentName       = '';     // from Firestore once opponent joins
@@ -1262,11 +1264,20 @@ function _onGameSnapshot(data) {
     // cache immediately, and again when the server confirms. _ignoreNextSnapshot
     // catches the first fire; this guard catches the second — if the incoming
     // turn isn't newer than the current state there's nothing new to apply.
-    if (newState.turn <= state.turn && !gameJustEnded) return;
+    //
+    // playMoveAnimation overwrites the global `state` while it runs (and a
+    // staged local move does too), so `state.turn` alone is not a reliable
+    // floor: a duplicate or late older snapshot could pass the check and later
+    // reset our own already-committed move. Ignore anything while a remote
+    // animation is in flight, and anything not newer than a staged move.
+    if (_remoteAnimating) return;
+    if (newState.turn <= Math.max(state.turn, _stagedTurn) && !gameJustEnded) return;
 
     // Opponent made an active move — animate it.
     const preState = state;
+    _remoteAnimating = true;
     playMoveAnimation(preState, newState, lastMove, function () {
+      _remoteAnimating = false;
       _recordHistory(preState, newState, lastMove);
       if (_isViewingHistory()) _returnToLive();   // auto-return: it's now your turn
       state      = newState;
@@ -2383,6 +2394,7 @@ function commitMove(move) {
   const preState  = state;
   const postState = applyMove(preState, move);
   resetUI();
+  _stagedTurn = postState.turn;
 
   // All moves (including winning ones): animate the preview, then hold for player review
   _stagingAnimation = true;
@@ -2516,6 +2528,7 @@ function undoMove() {
   state            = _pendingPreState;
   _pendingMove     = null;
   _pendingPreState = null;
+  _stagedTurn      = -1;
   document.getElementById('pending-controls').hidden = true;
 
   if (divineMove) {
@@ -2918,6 +2931,6 @@ if (_onlineMode) {
 // Otherwise mode overlay is visible by default — wait for player to choose.
 </script>
 
-<div class="version">2026.10.21.01</div>
+<div class="version">2026.10.29.01</div>
 </body>
 </html>
